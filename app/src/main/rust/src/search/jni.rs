@@ -1,0 +1,385 @@
+use std::ops::Not;
+use super::manager::{SEARCH_ENGINE_MANAGER, SearchProgressCallback};
+use super::parser::parse_search_query;
+use super::types::ValueType;
+use crate::core::DRIVER_MANAGER;
+use crate::ext::jni::{JniResult, JniResultExt};
+use crate::search::SearchResultItem;
+use anyhow::anyhow;
+use jni::objects::{GlobalRef, JIntArray, JLongArray, JObject, JString, JValue};
+use jni::sys::{JNI_FALSE, JNI_TRUE, jboolean, jint, jlong, jobjectArray};
+use jni::{JNIEnv, JavaVM};
+use jni_macro::jni_method;
+use log::error;
+use std::sync::Arc;
+
+struct JniCallback {
+    vm: JavaVM,
+    callback: GlobalRef,
+}
+
+impl SearchProgressCallback for JniCallback {
+    fn on_search_complete(&self, total_found: usize, total_regions: usize, elapsed_millis: u64) {
+        if let Ok(mut env) = self.vm.attach_current_thread() {
+            let result = env.call_method(
+                &self.callback,
+                "onSearchComplete",
+                "(JIJ)V",
+                &[
+                    JValue::Long(total_found as jlong),
+                    JValue::Int(total_regions as jint),
+                    JValue::Long(elapsed_millis as jlong),
+                ],
+            );
+
+            if let Err(e) = result {
+                error!("Failed to call onSearchComplete: {:?}", e);
+            }
+        }
+    }
+}
+
+fn jint_to_value_type(value: jint) -> Option<ValueType> {
+    match value {
+        0 => Some(ValueType::Byte),
+        1 => Some(ValueType::Word),
+        2 => Some(ValueType::Dword),
+        3 => Some(ValueType::Qword),
+        4 => Some(ValueType::Float),
+        5 => Some(ValueType::Double),
+        6 => Some(ValueType::Auto),
+        7 => Some(ValueType::Xor),
+        _ => None,
+    }
+}
+
+fn format_value(bytes: &[u8], typ: ValueType) -> String {
+    match typ {
+        ValueType::Byte => {
+            if bytes.len() >= 1 {
+                format!("{}", bytes[0])
+            } else {
+                "N/A".to_string()
+            }
+        },
+        ValueType::Word => {
+            if bytes.len() >= 2 {
+                let value = u16::from_le_bytes([bytes[0], bytes[1]]);
+                format!("{}", value)
+            } else {
+                "N/A".to_string()
+            }
+        },
+        ValueType::Dword | ValueType::Auto | ValueType::Xor => {
+            if bytes.len() >= 4 {
+                let value = u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]);
+                format!("{}", value)
+            } else {
+                "N/A".to_string()
+            }
+        },
+        ValueType::Qword => {
+            if bytes.len() >= 8 {
+                let value = u64::from_le_bytes([
+                    bytes[0], bytes[1], bytes[2], bytes[3],
+                    bytes[4], bytes[5], bytes[6], bytes[7]
+                ]);
+                format!("{}", value)
+            } else {
+                "N/A".to_string()
+            }
+        },
+        ValueType::Float => {
+            if bytes.len() >= 4 {
+                let value = f32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]);
+                format!("{}", value)
+            } else {
+                "N/A".to_string()
+            }
+        },
+        ValueType::Double => {
+            if bytes.len() >= 8 {
+                let value = f64::from_le_bytes([
+                    bytes[0], bytes[1], bytes[2], bytes[3],
+                    bytes[4], bytes[5], bytes[6], bytes[7]
+                ]);
+                format!("{}", value)
+            } else {
+                "N/A".to_string()
+            }
+        },
+    }
+}
+
+#[jni_method(70, "moe/fuqiuluo/mamu/driver/SearchEngine", "nativeInitSearchEngine", "(JLjava/lang/String;J)Z")]
+pub fn jni_init_search_engine(
+    mut env: JNIEnv,
+    _class: JObject,
+    memory_buffer_size: jlong,
+    cache_dir: JString,
+    chunk_size: jlong,
+) -> jboolean {
+    (|| -> JniResult<jboolean> {
+        let cache_dir_str: String = env.get_string(&cache_dir)?.into();
+
+        let mut manager = SEARCH_ENGINE_MANAGER
+            .write()
+            .map_err(|_| anyhow!("Failed to acquire SearchEngineManager write lock"))?;
+
+        manager.init(memory_buffer_size as usize, cache_dir_str, chunk_size as usize)?;
+
+        Ok(JNI_TRUE)
+    })()
+    .or_throw(&mut env)
+}
+
+#[jni_method(70, "moe/fuqiuluo/mamu/driver/SearchEngine", "nativeSearch", "(Ljava/lang/String;I[JILmoe/fuqiuluo/mamu/driver/SearchProgressCallback;)J")]
+pub fn jni_search(
+    mut env: JNIEnv,
+    _class: JObject,
+    query_str: JString,
+    default_type: jint,
+    regions: JLongArray,
+    memory_mode: jint, // 0 = 无, 1 = 透写, 2 = 无缓, 3 = 普通
+    callback_obj: JObject,
+) -> jlong {
+    (|| -> JniResult<jlong> {
+        let query: String = env.get_string(&query_str)?.into();
+
+        let value_type =
+            jint_to_value_type(default_type).ok_or_else(|| anyhow!("Invalid value type: {}", default_type))?;
+
+        let search_query = parse_search_query(&query, value_type).map_err(|e| anyhow!("Parse error: {}", e))?;
+
+        let regions_len = env.get_array_length(&regions)? as usize;
+        if regions_len % 2 != 0 {
+            return Err(anyhow!("Regions array length must be even"));
+        }
+
+        let mut regions_buf = vec![0i64; regions_len];
+        env.get_long_array_region(&regions, 0, &mut regions_buf)?;
+
+        let memory_regions: Vec<(u64, u64)> = regions_buf
+            .chunks(2)
+            .map(|chunk| (chunk[0] as u64, chunk[1] as u64))
+            .collect();
+
+        let callback: Option<Arc<dyn SearchProgressCallback>> = if callback_obj.is_null() {
+            None
+        } else {
+            let vm = env.get_java_vm()?;
+            let global_ref = env.new_global_ref(callback_obj)?;
+            Some(Arc::new(JniCallback {
+                vm,
+                callback: global_ref,
+            }))
+        };
+
+        let mut manager = SEARCH_ENGINE_MANAGER
+            .write()
+            .map_err(|_| anyhow!("Failed to acquire SearchEngineManager write lock"))?;
+
+        let count = manager.search_memory(&search_query, &memory_regions, memory_mode, callback)?;
+
+        Ok(count as jlong)
+    })()
+    .or_throw(&mut env)
+}
+
+#[jni_method(70, "moe/fuqiuluo/mamu/driver/SearchEngine", "nativeGetResults", "(II)[Lmoe/fuqiuluo/mamu/driver/SearchResultItem;")]
+pub fn jni_get_results(mut env: JNIEnv, _class: JObject, start: jint, size: jint) -> jobjectArray {
+    (|| -> JniResult<jobjectArray> {
+        let search_manager = SEARCH_ENGINE_MANAGER
+            .read()
+            .map_err(|_| anyhow!("Failed to acquire SearchEngineManager read lock"))?;
+
+        let mut results = search_manager.get_results(start as usize, size as usize)?
+            .into_iter()
+            .enumerate()
+            .map(|(index, value)| {
+                (index, value) // 原始索引, SearchResultItem
+            })
+            .collect::<Vec<(usize, SearchResultItem)>>();
+
+        let filter = search_manager.get_filter();
+        if filter.is_active() {
+            results = results.into_iter()
+                .filter(|(_idx, item)| {
+                    if filter.enable_address_filter {
+                        let addr = match item {
+                            SearchResultItem::Exact(exact) => exact.address,
+                            SearchResultItem::Fuzzy(fuzzy) => fuzzy.address,
+                        };
+                        if addr < filter.address_start || addr > filter.address_end {
+                            return false;
+                        }
+                    }
+
+                    if filter.enable_type_filter && filter.type_ids.is_empty().not() {
+                        let typ = match item {
+                            SearchResultItem::Exact(exact) => exact.typ,
+                            SearchResultItem::Fuzzy(fuzzy) => fuzzy.typ(),
+                        };
+                        if !filter.type_ids.contains(&typ) {
+                            return false;
+                        }
+                    }
+
+                    true
+                })
+                .collect::<Vec<(usize, SearchResultItem)>>();
+        }
+
+        let class = env.find_class("moe/fuqiuluo/mamu/driver/ExactSearchResultItem")?;
+        let array = env.new_object_array(results.len() as jint, &class, JObject::null())?;
+
+        let driver_manager = DRIVER_MANAGER.read()
+            .map_err(|_| anyhow!("Failed to acquire DriverManager read lock"))?;
+
+        for (i, (native_position, item)) in results.into_iter().enumerate() {
+            let obj = match item {
+                SearchResultItem::Exact(exact) => {
+                    let value_str = if let Some(bind_proc) = driver_manager.get_bound_process() {
+                        let size = exact.typ.size();
+                        let mut buffer = vec![0u8; size];
+
+                        if bind_proc.read_memory(exact.address as usize, &mut buffer, None).is_ok() {
+                            format_value(&buffer, exact.typ)
+                        } else {
+                            "N/A".to_string()
+                        }
+                    } else {
+                        "N/A".to_string()
+                    };
+
+                    let value_jstring = env.new_string(&value_str)?;
+
+                    env.new_object(
+                        &class,
+                        "(JJILjava/lang/String;)V",
+                        &[
+                            JValue::Long(native_position as i64),
+                            JValue::Long(exact.address as i64),
+                            JValue::Int(exact.typ as jint),
+                            JValue::Object(&value_jstring)
+                        ],
+                    )?
+                },
+                SearchResultItem::Fuzzy(_) => {
+                    return Err(anyhow!("FuzzySearchResultItem not supported in jni_get_results"));
+                },
+            };
+            env.set_object_array_element(&array, i as jint, obj)?;
+        }
+
+        Ok(array.into_raw())
+    })()
+    .or_throw(&mut env)
+}
+
+#[jni_method(70, "moe/fuqiuluo/mamu/driver/SearchEngine", "nativeGetTotalResultCount", "()J")]
+pub fn jni_get_total_result_count(mut env: JNIEnv, _class: JObject) -> jlong {
+    (|| -> JniResult<jlong> {
+        let manager = SEARCH_ENGINE_MANAGER
+            .read()
+            .map_err(|_| anyhow!("Failed to acquire SearchEngineManager read lock"))?;
+
+        let count = manager.get_total_count()?;
+        Ok(count as jlong)
+    })()
+    .or_throw(&mut env)
+}
+
+#[jni_method(70, "moe/fuqiuluo/mamu/driver/SearchEngine", "nativeClearSearchResults", "()V")]
+pub fn jni_clear_result(mut env: JNIEnv, _class: JObject) {
+    (|| -> JniResult<()> {
+        let mut manager = SEARCH_ENGINE_MANAGER
+            .write()
+            .map_err(|_| anyhow!("Failed to acquire SearchEngineManager read lock"))?;
+
+        manager.clear_results()?;
+
+        Ok(())
+    })()
+        .or_throw(&mut env);
+}
+
+#[jni_method(70, "moe/fuqiuluo/mamu/driver/SearchEngine", "nativeRemoveResult", "(I)Z")]
+pub fn jni_remove_result(mut env: JNIEnv, _class: JObject, index: jint) -> jboolean {
+    (|| -> JniResult<jboolean> {
+        let mut manager = SEARCH_ENGINE_MANAGER
+            .write()
+            .map_err(|_| anyhow!("Failed to acquire SearchEngineManager write lock"))?;
+
+        manager.remove_result(index as usize)?;
+
+        Ok(JNI_TRUE)
+    })()
+    .or_throw(&mut env)
+}
+
+#[jni_method(70, "moe/fuqiuluo/mamu/driver/SearchEngine", "nativeRemoveResults", "([I)Z")]
+pub fn jni_remove_results(mut env: JNIEnv, _class: JObject, indices_array: JIntArray) -> jboolean {
+    (|| -> JniResult<jboolean> {
+        let len = env.get_array_length(&indices_array)? as usize;
+        let mut indices_buf = vec![0i32; len];
+        env.get_int_array_region(&indices_array, 0, &mut indices_buf)?;
+
+        let indices: Vec<usize> = indices_buf.into_iter().map(|i| i as usize).collect();
+
+        let mut manager = SEARCH_ENGINE_MANAGER
+            .write()
+            .map_err(|_| anyhow!("Failed to acquire SearchEngineManager write lock"))?;
+
+        manager.remove_results_batch(indices)?;
+
+        Ok(JNI_TRUE)
+    })()
+    .or_throw(&mut env)
+}
+
+#[jni_method(70, "moe/fuqiuluo/mamu/driver/SearchEngine", "nativeSetFilter", "(ZJJZ[I)V")]
+pub fn jni_set_filter(
+    mut env: JNIEnv,
+    _class: JObject,
+    enable_address_filter: jboolean,
+    address_start: jlong,
+    address_end: jlong,
+    enable_type_ids_filter: jboolean,
+    type_ids: JIntArray,
+) {
+    (|| -> JniResult<()> {
+        let type_ids_len = env.get_array_length(&type_ids)? as usize;
+        let mut type_ids_buf = vec![0i32; type_ids_len];
+        env.get_int_array_region(&type_ids, 0, &mut type_ids_buf)?;
+
+        let mut manager = SEARCH_ENGINE_MANAGER
+            .write()
+            .map_err(|_| anyhow!("Failed to acquire SearchEngineManager write lock"))?;
+
+        manager.set_filter(
+            enable_address_filter != JNI_FALSE,
+            address_start as u64,
+            address_end as u64,
+            enable_type_ids_filter != JNI_FALSE,
+            type_ids_buf,
+        )?;
+
+        Ok(())
+    })()
+    .or_throw(&mut env)
+}
+
+#[jni_method(70, "moe/fuqiuluo/mamu/driver/SearchEngine", "nativeClearFilter", "()V")]
+pub fn jni_clear_filter(mut env: JNIEnv, _class: JObject) {
+    (|| -> JniResult<()> {
+        let mut manager = SEARCH_ENGINE_MANAGER
+            .write()
+            .map_err(|_| anyhow!("Failed to acquire SearchEngineManager write lock"))?;
+
+        manager.clear_filter()?;
+
+        Ok(())
+    })()
+    .or_throw(&mut env)
+}

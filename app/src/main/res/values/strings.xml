@@ -1,0 +1,170 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <string name="app_name">Mamu</string>
+    <string name="close_fullscreen_content_desc">关闭</string>
+    <string name="floating_icon_content_desc">Yuzusoft</string>
+
+    <!-- 设置界面 -->
+    <string name="settings_title">设置</string>
+
+    <!-- 快速操作 -->
+    <string name="settings_quick_actions">快速操作</string>
+    <string name="settings_select_process">选择调试进程</string>
+    <string name="settings_no_process_selected">未选择进程</string>
+    <string name="settings_terminate_proc">终止进程</string>
+    <string name="settings_exit">退出悬浮窗</string>
+
+    <!-- 进程设置 -->
+    <string name="settings_process_settings">进程设置</string>
+    <string name="settings_memory_range">选择内存范围</string>
+    <string name="settings_memory_range_summary">点击选择要搜索的内存区域</string>
+    <string name="settings_hide_mamu">对进程隐藏Mamu</string>
+    <string name="settings_hide_mode_1">隐藏模式 1</string>
+    <string name="settings_hide_mode_2">隐藏模式 2</string>
+    <string name="settings_hide_mode_3">隐藏模式 3</string>
+    <string name="settings_hide_mode_4">隐藏模式 4</string>
+    <string name="settings_skip_memory">跳过内存区域</string>
+    <string name="settings_skip_memory_none">否</string>
+    <string name="settings_skip_memory_empty">空</string>
+    <string name="settings_skip_memory_empty_zygote">空 or Zygote</string>
+    <string name="settings_auto_pause">打开悬浮窗自动暂停进程</string>
+    <string name="settings_freeze_interval">冻结间隔</string>
+
+    <!-- 搜索设置 -->
+    <string name="settings_search_settings">搜索设置</string>
+    <string name="settings_chunk_size">搜索分块大小</string>
+    <string name="settings_chunk_size_summary">每次搜索读取的内存块大小</string>
+    <string name="chunk_size_128_kb">128 KB</string>
+    <string name="chunk_size_512_kb">512 KB</string>
+    <string name="chunk_size_1_mb">1 MB</string>
+    <string name="chunk_size_4_mb">4 MB</string>
+    <string name="settings_rude_search">简约搜索模式</string>
+    <string name="settings_rude_search_summary">跳过可能的空洞页（更快但可能漏数据）</string>
+    <string name="settings_failed_page_threshold">连续失败页阈值</string>
+    <string name="settings_failed_page_threshold_summary">达到阈值后跳过整个256KB段</string>
+
+    <!-- 通用设置 -->
+    <string name="settings_general_settings">通用设置</string>
+    <string name="settings_filter_system_process">过滤系统进程</string>
+    <string name="settings_filter_linux_process">过滤Linux进程</string>
+    <string name="settings_list_update_interval">保存列表更新间隔</string>
+    <string name="settings_memory_rw_mode">内存读写模式</string>
+    <string name="settings_memory_rw_mode_none">无</string>
+    <string name="settings_memory_rw_mode_writethrough">透写 (慢)</string>
+    <string name="settings_memory_rw_mode_nocache">无缓 (慢)</string>
+    <string name="settings_memory_rw_mode_normal">普通 (慢)</string>
+    <string name="settings_memory_rw_mode_pgfault">缺页访问（较快）</string>
+    <string name="settings_opacity">透明度</string>
+    <string name="settings_memory_buffer_size">内存缓冲区大小</string>
+    <string name="settings_memory_buffer_size_summary">搜索结果内存缓冲区（修改后需重启应用）</string>
+    <string name="settings_top_most_layer">最高层级绘制</string>
+    <string name="settings_top_most_layer_summary">启用后悬浮窗显示在所有应用之上（易暴毙）</string>
+
+    <!-- 界面设置 -->
+    <string name="settings_ui_settings">界面设置</string>
+    <string name="settings_keyboard">键盘</string>
+    <string name="settings_keyboard_builtin">内置</string>
+    <string name="settings_keyboard_system">系统输入法</string>
+    <string name="settings_language">语言</string>
+    <string name="settings_language_zh_cn">简体中文</string>
+    <string name="settings_language_en">English</string>
+    <string name="settings_tab_switch_animation">Tab切换动画</string>
+
+    <!-- Dialog相关 -->
+    <string name="dialog_select_operator">选择操作符</string>
+    <string name="dialog_select_memory_range">选择内存范围</string>
+    <string name="dialog_skip_memory_title">跳过内存区域</string>
+
+    <!-- 内存范围选项 -->
+    <string name="memory_empty_region">空区域</string>
+    <string name="memory_range_unselected">未选择内存范围</string>
+    <string name="memory_range_count">已选择 %d 个范围</string>
+
+    <!-- 成功消息 -->
+    <string name="success_process_terminated">进程已终止</string>
+    <string name="success_process_selected">已选择进程: %s</string>
+    <string name="success_memory_range_saved">内存范围已保存</string>
+    <string name="success_skip_memory_saved">跳过内存设置已保存</string>
+    <string name="success_memory_rw_mode_saved">内存读写模式已保存</string>
+    <string name="success_memory_buffer_size_saved">内存缓冲区大小已保存，需重启应用生效</string>
+    <string name="success_keyboard_saved">键盘设置已保存</string>
+    <string name="success_language_saved">语言设置已保存</string>
+    <string name="success_chunk_size_saved">搜索分块大小已保存</string>
+    <string name="success_topmost_changed">最高层级绘制已%s，需重启悬浮窗生效</string>
+    <string name="topmost_enabled">启用</string>
+    <string name="topmost_disabled">关闭</string>
+    <string name="success_search_complete">搜索完成，找到 %1$d 个结果，耗时 %2$dms</string>
+    <string name="error_search_failed_unknown" translatable="false">搜索结果获取失败</string>
+
+    <!-- 错误消息 -->
+    <string name="error_topmost_fallback">最高层级模式不可用，已回退到普通模式</string>
+    <string name="error_process_died">进程已死亡 (PID: %d)</string>
+    <string name="error_terminate_failed">终止进程失败</string>
+    <string name="error_no_bound_process">当前无已绑定进程</string>
+    <string name="error_bind_process_failed">绑定进程失败</string>
+    <string name="error_bind_process_failed_with_reason">绑定进程失败: %s</string>
+    <string name="error_empty_search_value">请输入搜索值</string>
+
+    <!-- 功能占位提示 -->
+    <string name="feature_convert_base_todo">进制转换功能待实现</string>
+    <string name="feature_select_memory_range_todo">选择内存范围功能待实现</string>
+    <string name="feature_history_todo">历史记录功能待实现</string>
+
+    <!-- 通用UI -->
+    <string name="placeholder_process_name">Process Name</string>
+    <string name="placeholder_pid">[1234]</string>
+    <string name="placeholder_architecture">[x64]</string>
+    <string name="placeholder_memory_size">[512 MB]</string>
+    <string name="button_cancel">取消</string>
+    <string name="button_confirm">确定</string>
+    <string name="content_desc_menu">菜单项</string>
+    <string name="label_value_encrypted">此值是否被加密</string>
+    <string name="label_value_allow_pagefault">深度访问（缺页）</string>
+    <string name="label_value_freeze">冻结</string>
+    <string name="label_search_all_memory">在全部内存中</string>
+    <string name="button_new_search">新搜索</string>
+    <string name="description_auto_type" tools:ignore="TypographyDashes">A: Auto (–1.8e+308 - 1.8e+308)</string>
+    <string name="label_type">类型：</string>
+    <string name="content_desc_convert_hex">转换进制</string>
+    <string name="symbol_equals">=</string>
+    <string name="label_value">值:</string>
+    <string name="search_dialog_title">输入要搜索的值</string>
+    <string name="search_dialog_subtitle">输入从-1.8e+308到1.8e+308的值</string>
+    <string name="memory_buffer_size_512_mb">512 MB</string>
+
+    <!-- 删除对话框 -->
+    <string name="dialog_remove_title">移除选项</string>
+    <string name="option_remove_all">移除全部</string>
+    <string name="option_restore_and_remove">恢复并移除</string>
+    <string name="option_remove_selected">移除</string>
+    <string name="label_remove">移除</string>
+
+    <!-- 过滤对话框 -->
+    <string name="dialog_filter_title">过滤配置</string>
+    <string name="label_max_display_count">单页最大显示</string>
+    <string name="label_address_range_filter">地址范围过滤</string>
+    <string name="label_address_start">起始</string>
+    <string name="label_address_end">结束</string>
+    <string name="label_value_range_filter">值范围过滤</string>
+    <string name="label_value_min">最小值</string>
+    <string name="label_value_max">最大值</string>
+    <string name="label_data_type_filter">数据类型过滤</string>
+    <string name="button_select_data_types">选择数据类型</string>
+    <string name="label_permission_filter">权限过滤</string>
+    <string name="button_select_permissions">选择权限</string>
+    <string name="button_reset">重置</string>
+    <string name="button_apply">应用</string>
+    <string name="default_page_size">100</string>
+    <string name="hint_address_start">00000000</string>
+    <string name="hint_address_end">FFFFFFFF</string>
+    <string name="hint_value_min">最小值</string>
+    <string name="hint_value_max">最大值</string>
+
+    <!-- 修改值对话框 -->
+    <string name="modify_dialog_title">修改值</string>
+    <string name="modify_dialog_subtitle">输入新的值</string>
+    <string name="button_goto">转到</string>
+    <string name="button_no">否</string>
+    <string name="button_yes">是</string>
+
+</resources>

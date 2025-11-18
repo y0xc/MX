@@ -1,0 +1,35 @@
+[package]
+name = "mamu_core"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+crate-type = ["cdylib", "staticlib"]
+
+[dependencies]
+anyhow = "1.0"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tokio = { version = "1", features = ["full"] }
+nix = { version = "0.30.1", features = ["process", "socket", "mman", "feature"] }
+log = "0.4"
+jni = { version = "0.21.1", features = ["default"] }
+android_logger = "0.15.1"
+obfstr = "0.4.4"
+lazy_static = "1.5.0"
+memmap2 = "0.9"
+rayon = "1.11.0"
+jni-macro = { path = "jni-macro/jni-facade" }
+bplustree = { path = "bplustree" }
+memchr = "2.7.6"
+
+[dev-dependencies]
+rand = "0.8"
+memchr = "2.7"
+
+[profile.release]
+opt-level = "z"        # 针对大小优化 (z 比 s 更激进)
+lto = true             # Link Time Optimization，跨crate优化
+codegen-units = 1      # 单个代码生成单元，更好的优化（但编译慢）
+strip = true           # 去除符号表
+panic = "abort"        # panic时直接abort，减小二进制大小

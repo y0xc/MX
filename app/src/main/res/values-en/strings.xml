@@ -1,0 +1,162 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <string name="app_name">Mamu</string>
+    <string name="close_fullscreen_content_desc">Close</string>
+    <string name="floating_icon_content_desc">Yuzusoft</string>
+
+    <!-- Settings Screen -->
+    <string name="settings_title">Settings</string>
+
+    <!-- Quick Actions -->
+    <string name="settings_quick_actions">Quick Actions</string>
+    <string name="settings_select_process">Select Debug Process</string>
+    <string name="settings_no_process_selected">No process selected</string>
+    <string name="settings_terminate_proc">Terminate Process</string>
+    <string name="settings_exit">Exit Overlay</string>
+
+    <!-- Process Settings -->
+    <string name="settings_process_settings">Process Settings</string>
+    <string name="settings_memory_range">Select Memory Range</string>
+    <string name="settings_memory_range_summary">Tap to select memory regions to search</string>
+    <string name="settings_hide_mamu">Hide Mamu from Process</string>
+    <string name="settings_hide_mode_1">Hide Mode 1</string>
+    <string name="settings_hide_mode_2">Hide Mode 2</string>
+    <string name="settings_hide_mode_3">Hide Mode 3</string>
+    <string name="settings_hide_mode_4">Hide Mode 4</string>
+    <string name="settings_skip_memory">Skip Memory Regions</string>
+    <string name="settings_skip_memory_none">No</string>
+    <string name="settings_skip_memory_empty">Empty</string>
+    <string name="settings_skip_memory_empty_zygote">Empty or Zygote</string>
+    <string name="settings_auto_pause">Auto Pause Process on Overlay Open</string>
+    <string name="settings_freeze_interval">Freeze Interval</string>
+
+    <!-- Search Settings -->
+    <string name="settings_search_settings">Search Settings</string>
+    <string name="settings_chunk_size">Search Chunk Size</string>
+    <string name="settings_chunk_size_summary">Memory block size per search operation</string>
+    <string name="chunk_size_128_kb">128 KB</string>
+    <string name="chunk_size_512_kb">512 KB</string>
+    <string name="chunk_size_1_mb">1 MB</string>
+    <string name="chunk_size_4_mb">4 MB</string>
+    <string name="settings_rude_search">Simplified Search Mode</string>
+    <string name="settings_rude_search_summary">Skip potential empty pages (faster but may miss data)</string>
+    <string name="settings_failed_page_threshold">Consecutive Failed Page Threshold</string>
+    <string name="settings_failed_page_threshold_summary">Skip entire 256KB segment after reaching threshold</string>
+
+    <!-- General Settings -->
+    <string name="settings_general_settings">General Settings</string>
+    <string name="settings_filter_system_process">Filter System Processes</string>
+    <string name="settings_filter_linux_process">Filter Linux Processes</string>
+    <string name="settings_list_update_interval">Saved List Update Interval</string>
+    <string name="settings_memory_rw_mode">Memory Read/Write Mode</string>
+    <string name="settings_memory_rw_mode_none">None</string>
+    <string name="settings_memory_rw_mode_writethrough">Write-through (Slow)</string>
+    <string name="settings_memory_rw_mode_nocache">No Cache (Slow)</string>
+    <string name="settings_memory_rw_mode_normal">Normal (Slow)</string>
+    <string name="settings_memory_rw_mode_pgfault">Page Fault（May Fast）</string>
+    <string name="settings_opacity">Opacity</string>
+    <string name="settings_memory_buffer_size">Memory Buffer Size</string>
+    <string name="settings_memory_buffer_size_summary">Search result memory buffer (restart required)</string>
+    <string name="settings_top_most_layer">Top-Most Layer Rendering</string>
+    <string name="settings_top_most_layer_summary">Enable overlay above all apps (may be unstable)</string>
+
+    <!-- UI Settings -->
+    <string name="settings_ui_settings">UI Settings</string>
+    <string name="settings_keyboard">Keyboard</string>
+    <string name="settings_keyboard_builtin">Built-in</string>
+    <string name="settings_keyboard_system">System IME</string>
+    <string name="settings_language">Language</string>
+    <string name="settings_language_zh_cn">Simplified Chinese</string>
+    <string name="settings_language_en">English</string>
+    <string name="settings_tab_switch_animation">Tab Switch Animation</string>
+
+    <!-- Dialog Related -->
+    <string name="dialog_select_operator">Select Operator</string>
+    <string name="dialog_select_memory_range">Select Memory Range</string>
+    <string name="dialog_skip_memory_title">Skip Memory Regions</string>
+
+    <!-- Memory Range Options -->
+    <string name="memory_empty_region">Empty Region</string>
+    <string name="memory_range_unselected">No memory range selected</string>
+    <string name="memory_range_count">%d ranges selected</string>
+
+    <!-- Success Messages -->
+    <string name="success_process_terminated">Process terminated</string>
+    <string name="success_process_selected">Process selected: %s</string>
+    <string name="success_memory_range_saved">Memory range saved</string>
+    <string name="success_skip_memory_saved">Skip memory settings saved</string>
+    <string name="success_memory_rw_mode_saved">Memory R/W mode saved</string>
+    <string name="success_memory_buffer_size_saved">Memory buffer size saved, restart required</string>
+    <string name="success_keyboard_saved">Keyboard settings saved</string>
+    <string name="success_language_saved">Language settings saved</string>
+    <string name="success_chunk_size_saved">Search chunk size saved</string>
+    <string name="success_topmost_changed">Top-most layer rendering %s, restart overlay required</string>
+    <string name="topmost_enabled">enabled</string>
+    <string name="topmost_disabled">disabled</string>
+    <string name="success_search_complete">Search completed, found %1$d results in %2$dms</string>
+
+    <!-- Error Messages -->
+    <string name="error_topmost_fallback">Top-most layer mode unavailable, falling back to normal mode</string>
+    <string name="error_process_died">Process died (PID: %d)</string>
+    <string name="error_terminate_failed">Failed to terminate process</string>
+    <string name="error_no_bound_process">No process currently bound</string>
+    <string name="error_bind_process_failed">Failed to bind process</string>
+    <string name="error_bind_process_failed_with_reason">Failed to bind process: %s</string>
+    <string name="error_empty_search_value">Please enter a search value</string>
+
+    <!-- Feature Placeholder Messages -->
+    <string name="feature_convert_base_todo">Base conversion feature coming soon</string>
+    <string name="feature_select_memory_range_todo">Memory range selection feature coming soon</string>
+    <string name="feature_history_todo">History feature coming soon</string>
+
+    <!-- Generic UI -->
+    <string name="placeholder_process_name">Process Name</string>
+    <string name="placeholder_pid">[1234]</string>
+    <string name="placeholder_architecture">[x64]</string>
+    <string name="placeholder_memory_size">[512 MB]</string>
+    <string name="button_cancel">Cancel</string>
+    <string name="button_confirm">OK</string>
+    <string name="content_desc_menu">Menu item</string>
+    <string name="label_value_encrypted">Is this value encrypted</string>
+    <string name="label_value_allow_pagefault">Deeply Access（PageFault）</string>
+    <string name="label_value_freeze">Freeze</string>
+    <string name="label_search_all_memory">In all memory</string>
+    <string name="button_new_search">New Search</string>
+    <string name="description_auto_type" tools:ignore="TypographyDashes">A: Auto (–1.8e+308 - 1.8e+308)</string>
+    <string name="label_type">Type:</string>
+    <string name="content_desc_convert_hex">Convert base</string>
+    <string name="symbol_equals">=</string>
+    <string name="label_value">Value:</string>
+    <string name="search_dialog_title">Enter value to search</string>
+    <string name="search_dialog_subtitle">Enter value from -1.8e+308 to 1.8e+308</string>
+    <string name="memory_buffer_size_512_mb">512 MB</string>
+
+    <!-- Remove Dialog -->
+    <string name="dialog_remove_title">Remove Options</string>
+    <string name="option_remove_all">Remove All</string>
+    <string name="option_restore_and_remove">Restore and Remove</string>
+    <string name="option_remove_selected">Remove</string>
+    <string name="label_remove">Remove</string>
+
+    <!-- Filter Dialog -->
+    <string name="dialog_filter_title">Filter Configuration</string>
+    <string name="label_max_display_count">Max Display Per Page</string>
+    <string name="label_address_range_filter">Address Range Filter</string>
+    <string name="label_address_start">Start</string>
+    <string name="label_address_end">End</string>
+    <string name="label_value_range_filter">Value Range Filter</string>
+    <string name="label_value_min">Min</string>
+    <string name="label_value_max">Max</string>
+    <string name="label_data_type_filter">Data Type Filter</string>
+    <string name="button_select_data_types">Select Data Types</string>
+    <string name="label_permission_filter">Permission Filter</string>
+    <string name="button_select_permissions">Select Permissions</string>
+    <string name="button_reset">Reset</string>
+    <string name="button_apply">Apply</string>
+    <string name="default_page_size">100</string>
+    <string name="hint_address_start">00000000</string>
+    <string name="hint_address_end">FFFFFFFF</string>
+    <string name="hint_value_min">Min value</string>
+    <string name="hint_value_max">Max value</string>
+
+</resources>

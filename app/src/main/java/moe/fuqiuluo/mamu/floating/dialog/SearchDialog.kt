@@ -1,0 +1,265 @@
+package moe.fuqiuluo.mamu.floating.dialog
+
+import android.annotation.SuppressLint
+import android.content.ClipboardManager
+import android.content.Context
+import android.content.res.Configuration
+import android.util.Log
+import android.view.LayoutInflater
+import com.tencent.mmkv.MMKV
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
+import moe.fuqiuluo.mamu.R
+import moe.fuqiuluo.mamu.databinding.DialogSearchInputBinding
+import moe.fuqiuluo.mamu.driver.SearchEngine
+import moe.fuqiuluo.mamu.driver.SearchProgressCallback
+import moe.fuqiuluo.mamu.driver.WuwaDriver
+import moe.fuqiuluo.mamu.ext.memoryAccessMode
+import moe.fuqiuluo.mamu.ext.selectedMemoryRanges
+import moe.fuqiuluo.mamu.floating.ext.divideToSimpleMemoryRange
+import moe.fuqiuluo.mamu.floating.model.DisplayMemRegionEntry
+import moe.fuqiuluo.mamu.floating.model.DisplayValueType
+import moe.fuqiuluo.mamu.widget.BuiltinKeyboard
+import moe.fuqiuluo.mamu.widget.NotificationOverlay
+import moe.fuqiuluo.mamu.widget.simpleSingleChoiceDialog
+
+data class SearchDialogState(
+    var lastSelectedValueType: DisplayValueType = DisplayValueType.DWORD,
+    var lastInputValue: String = ""
+)
+
+private const val TAG = "SearchDialog"
+
+class SearchDialog(
+    context: Context,
+    private val notification: NotificationOverlay,
+    private val searchDialogState: SearchDialogState,
+    private val clipboardManager: ClipboardManager,
+    private val onSearchCompleted: ((ranges: List<DisplayMemRegionEntry>) -> Unit)? = null
+) : BaseDialog(context) {
+    private val searchScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    private lateinit var searchRanges: List<DisplayMemRegionEntry>
+
+    private inner class SearchCallback : SearchProgressCallback {
+        override fun onSearchComplete(
+            totalFound: Long,
+            totalRegions: Int,
+            elapsedMillis: Long
+        ) {
+            searchScope.launch(Dispatchers.Main) {
+                if (!::searchRanges.isInitialized) {
+                    notification.showError(context.getString(R.string.error_search_failed_unknown))
+                    return@launch
+                } else {
+                    notification.showSuccess(
+                        context.getString(
+                            R.string.success_search_complete,
+                            totalFound,
+                            elapsedMillis
+                        )
+                    )
+                    onSearchCompleted?.invoke(searchRanges)
+                }
+            }
+
+        }
+    }
+
+    fun release() {
+        searchScope.cancel()
+    }
+
+    @SuppressLint("ClickableViewAccessibility", "SetTextI18n")
+    override fun setupDialog() {
+        val binding = DialogSearchInputBinding.inflate(LayoutInflater.from(context))
+        dialog.setContentView(binding.root)
+
+        val isPortrait =
+            context.resources.configuration.orientation == Configuration.ORIENTATION_PORTRAIT
+        binding.builtinKeyboard.setScreenOrientation(isPortrait)
+
+        val operators = arrayOf("=", "≠", "<", ">", "≤", "≥")
+        var currentOperator = "="
+
+        binding.btnOperator.setOnClickListener {
+            context.simpleSingleChoiceDialog(
+                title = context.getString(moe.fuqiuluo.mamu.R.string.dialog_select_operator),
+                options = operators,
+                selected = operators.indexOf(currentOperator),
+                showTitle = true,
+                showRadioButton = false,
+                textColors = null,
+                onSingleChoice = { which ->
+                    currentOperator = operators[which]
+                    binding.btnOperator.text = currentOperator
+                }
+            )
+        }
+
+        val allValueTypes = DisplayValueType.entries.toTypedArray()
+        val valueTypeNames = allValueTypes.map { it.displayName }.toTypedArray()
+        val valueTypeColors = allValueTypes.map { it.textColor }.toTypedArray()
+
+        var currentValueType = searchDialogState.lastSelectedValueType
+
+        fun updateSubtitleRange(type: DisplayValueType) {
+            binding.subtitleRange.text = type.rangeDescription
+        }
+
+        // 恢复上次输入的值
+        binding.inputValue.setText(searchDialogState.lastInputValue)
+
+        binding.btnValueType.text = currentValueType.displayName
+        updateSubtitleRange(currentValueType)
+
+        binding.btnValueType.setOnClickListener {
+            context.simpleSingleChoiceDialog(
+                options = valueTypeNames,
+                selected = allValueTypes.indexOf(currentValueType),
+                showTitle = false,
+                showRadioButton = false,
+                textColors = valueTypeColors,
+                onSingleChoice = { which ->
+                    currentValueType = allValueTypes[which]
+                    searchDialogState.lastSelectedValueType = currentValueType
+                    binding.btnValueType.text = currentValueType.displayName
+                    updateSubtitleRange(currentValueType)
+                }
+            )
+        }
+
+        binding.btnConvertBase.setOnClickListener {
+            notification.showSuccess(context.getString(moe.fuqiuluo.mamu.R.string.feature_convert_base_todo))
+        }
+
+        binding.btnSearchAllMemory.setOnClickListener {
+            notification.showSuccess(context.getString(moe.fuqiuluo.mamu.R.string.feature_select_memory_range_todo))
+        }
+
+        binding.builtinKeyboard.listener = object : BuiltinKeyboard.KeyboardListener {
+            override fun onKeyInput(key: String) {
+                val currentText = binding.inputValue.text.toString()
+                val selectionStart = binding.inputValue.selectionStart
+                val selectionEnd = binding.inputValue.selectionEnd
+
+                val newText = if (selectionStart != selectionEnd) {
+                    // 有选中文本，替换选中部分
+                    currentText.take(selectionStart) + key + currentText.substring(selectionEnd)
+                } else {
+                    // 无选中文本，在光标处插入
+                    currentText.take(selectionStart) + key + currentText.substring(selectionStart)
+                }
+
+                binding.inputValue.setText(newText)
+                binding.inputValue.setSelection(selectionStart + key.length)
+            }
+
+            override fun onDelete() {
+                val currentText = binding.inputValue.text.toString()
+                val selectionStart = binding.inputValue.selectionStart
+                val selectionEnd = binding.inputValue.selectionEnd
+
+                if (selectionStart != selectionEnd) {
+                    // 有选中文本，删除选中部分
+                    val newText =
+                        currentText.take(selectionStart) + currentText.substring(selectionEnd)
+                    binding.inputValue.setText(newText)
+                    binding.inputValue.setSelection(selectionStart)
+                } else if (selectionStart > 0) {
+                    // 无选中文本，删除光标前一个字符
+                    val newText =
+                        currentText.take(selectionStart - 1) + currentText.substring(selectionStart)
+                    binding.inputValue.setText(newText)
+                    binding.inputValue.setSelection(selectionStart - 1)
+                }
+            }
+
+            override fun onSelectAll() {
+                binding.inputValue.selectAll()
+            }
+
+            override fun onMoveLeft() {
+                val cursorPos = binding.inputValue.selectionStart
+                if (cursorPos > 0) {
+                    binding.inputValue.setSelection(cursorPos - 1)
+                }
+            }
+
+            override fun onMoveRight() {
+                val cursorPos = binding.inputValue.selectionStart
+                if (cursorPos < binding.inputValue.text.length) {
+                    binding.inputValue.setSelection(cursorPos + 1)
+                }
+            }
+
+            override fun onHistory() {
+                notification.showSuccess(context.getString(moe.fuqiuluo.mamu.R.string.feature_history_todo))
+            }
+
+            override fun onPaste() {
+                val clip = clipboardManager.primaryClip
+                if (clip != null && clip.itemCount > 0) {
+                    val text = clip.getItemAt(0).text?.toString() ?: ""
+                    val currentText = binding.inputValue.text.toString()
+                    val cursorPos = binding.inputValue.selectionStart
+                    val newText =
+                        currentText.take(cursorPos) + text + currentText.substring(cursorPos)
+                    binding.inputValue.setText(newText)
+                    binding.inputValue.setSelection(cursorPos + text.length)
+                }
+            }
+        }
+
+        binding.btnCancel.setOnClickListener {
+            searchDialogState.lastInputValue = binding.inputValue.text.toString()
+            onCancel?.invoke()
+            dialog.dismiss()
+        }
+
+        binding.btnConfirm.setOnClickListener {
+            val expression = binding.inputValue.text.toString().trim()
+            val valueType = currentValueType
+
+            if (expression.isEmpty()) {
+                notification.showError(context.getString(moe.fuqiuluo.mamu.R.string.error_empty_search_value))
+                return@setOnClickListener
+            }
+
+            searchDialogState.lastInputValue = expression
+            dialog.dismiss()
+
+            searchScope.launch {
+                val mmkv = MMKV.defaultMMKV()
+                val memoryMode = mmkv.memoryAccessMode
+                val ranges = mmkv.selectedMemoryRanges
+
+                val nativeRegions = mutableListOf<Long>()
+                WuwaDriver.queryMemRegions()
+                    .divideToSimpleMemoryRange()
+                    .also {
+                        searchRanges = it
+                    }
+                    .filter { ranges.contains(it.range) }
+                    .forEach {
+                        nativeRegions.add(it.start)
+                        nativeRegions.add(it.end)
+                    }
+
+                runCatching {
+                    SearchEngine.exactSearchWithCustomRange(
+                        expression,
+                        valueType,
+                        nativeRegions.toLongArray(),
+                        memoryMode,
+                        SearchCallback()
+                    )
+                }.onFailure {
+                    Log.e(TAG, "搜索失败", it)
+                }
+            }
+        }
+    }
+}

@@ -1,0 +1,3 @@
+[submodule "wuwa-sdk"]
+	path = wuwa-sdk
+	url = git@github.com:Shirasuki/android-wuwa.git

@@ -1,0 +1,266 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/root_layout"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#CC1F1F1F"
+    android:orientation="vertical">
+
+    <!-- 工具栏容器 (会根据屏幕方向动态调整) -->
+    <LinearLayout
+        android:id="@+id/toolbar_container"
+        android:layout_width="match_parent"
+        android:layout_height="65dp"
+        android:background="#DD1F1F1F"
+        android:elevation="4dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingStart="8dp"
+        android:paddingEnd="8dp">
+
+        <!-- 当前附加应用图标 -->
+        <ImageView
+            android:id="@+id/attached_app_icon"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:layout_marginEnd="8dp"
+            android:scaleType="centerCrop"
+            android:src="@mipmap/ic_launcher" />
+
+        <!-- TabBar 容器 (动态填充) -->
+        <FrameLayout
+            android:id="@+id/tabbar_container"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1">
+
+            <HorizontalScrollView
+                android:id="@+id/tabbar_scroll"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:scrollbars="none">
+
+                <LinearLayout
+                    android:id="@+id/tabbar_layout"
+                    android:layout_width="wrap_content"
+                    android:layout_height="match_parent"
+                    android:orientation="horizontal">
+
+                    <!-- 设置 Tab -->
+                    <FrameLayout
+                        android:id="@+id/tab_frame_settings"
+                        android:layout_width="40dp"
+                        android:layout_height="match_parent">
+
+                        <ImageButton
+                            android:id="@+id/tab_settings"
+                            android:layout_width="match_parent"
+                            android:layout_height="match_parent"
+                            android:background="?android:attr/selectableItemBackgroundBorderless"
+                            android:contentDescription="设置"
+                            android:padding="8dp"
+                            android:scaleType="centerInside"
+                            android:src="@drawable/icon_settings_24px"
+                            android:tint="#FFFFFF" />
+
+                        <View
+                            android:id="@+id/indicator_settings"
+                            android:layout_width="match_parent"
+                            android:layout_height="3dp"
+                            android:layout_gravity="bottom"
+                            android:background="#1976D2"
+                            android:visibility="gone" />
+
+                    </FrameLayout>
+
+                    <!-- 搜索 Tab -->
+                    <FrameLayout
+                        android:id="@+id/tab_frame_search"
+                        android:layout_width="40dp"
+                        android:layout_height="match_parent">
+
+                        <ImageButton
+                            android:id="@+id/tab_search"
+                            android:layout_width="match_parent"
+                            android:layout_height="match_parent"
+                            android:background="?android:attr/selectableItemBackgroundBorderless"
+                            android:contentDescription="搜索"
+                            android:padding="8dp"
+                            android:scaleType="centerInside"
+                            android:src="@drawable/icon_search_24px"
+                            android:tint="#FFFFFF" />
+
+                        <View
+                            android:id="@+id/indicator_search"
+                            android:layout_width="match_parent"
+                            android:layout_height="3dp"
+                            android:layout_gravity="bottom"
+                            android:background="#1976D2"
+                            android:visibility="gone" />
+
+                    </FrameLayout>
+
+                    <!-- 保存的地址 Tab -->
+                    <FrameLayout
+                        android:id="@+id/tab_frame_saved_addresses"
+                        android:layout_width="40dp"
+                        android:layout_height="match_parent">
+
+                        <ImageButton
+                            android:id="@+id/tab_saved_addresses"
+                            android:layout_width="match_parent"
+                            android:layout_height="match_parent"
+                            android:background="?android:attr/selectableItemBackgroundBorderless"
+                            android:contentDescription="保存的地址"
+                            android:padding="8dp"
+                            android:scaleType="centerInside"
+                            android:src="@drawable/icon_save_24px"
+                            android:tint="#FFFFFF" />
+
+                        <View
+                            android:id="@+id/indicator_saved_addresses"
+                            android:layout_width="match_parent"
+                            android:layout_height="3dp"
+                            android:layout_gravity="bottom"
+                            android:background="#1976D2"
+                            android:visibility="gone" />
+
+                    </FrameLayout>
+
+                    <!-- 内存预览 Tab -->
+                    <FrameLayout
+                        android:id="@+id/tab_frame_memory_preview"
+                        android:layout_width="40dp"
+                        android:layout_height="match_parent">
+
+                        <ImageButton
+                            android:id="@+id/tab_memory_preview"
+                            android:layout_width="match_parent"
+                            android:layout_height="match_parent"
+                            android:background="?android:attr/selectableItemBackgroundBorderless"
+                            android:contentDescription="内存预览"
+                            android:padding="8dp"
+                            android:scaleType="centerInside"
+                            android:src="@drawable/icon_list_24px"
+                            android:tint="#FFFFFF" />
+
+                        <View
+                            android:id="@+id/indicator_memory_preview"
+                            android:layout_width="match_parent"
+                            android:layout_height="3dp"
+                            android:layout_gravity="bottom"
+                            android:background="#1976D2"
+                            android:visibility="gone" />
+
+                    </FrameLayout>
+
+                    <!-- 断点 Tab -->
+                    <FrameLayout
+                        android:id="@+id/tab_frame_breakpoints"
+                        android:layout_width="40dp"
+                        android:layout_height="match_parent">
+
+                        <ImageButton
+                            android:id="@+id/tab_breakpoints"
+                            android:layout_width="match_parent"
+                            android:layout_height="match_parent"
+                            android:background="?android:attr/selectableItemBackgroundBorderless"
+                            android:contentDescription="断点"
+                            android:padding="8dp"
+                            android:scaleType="centerInside"
+                            android:src="@drawable/icon_bug_report_24px"
+                            android:tint="#FFFFFF" />
+
+                        <View
+                            android:id="@+id/indicator_breakpoints"
+                            android:layout_width="match_parent"
+                            android:layout_height="3dp"
+                            android:layout_gravity="bottom"
+                            android:background="#1976D2"
+                            android:visibility="gone" />
+
+                    </FrameLayout>
+
+                </LinearLayout>
+
+            </HorizontalScrollView>
+
+        </FrameLayout>
+
+        <!-- 关闭按钮 -->
+        <ImageButton
+            android:id="@+id/btn_close_fullscreen"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:background="?android:attr/selectableItemBackgroundBorderless"
+            android:contentDescription="关闭"
+            android:padding="8dp"
+            android:scaleType="centerInside"
+            android:src="@drawable/icon_close_24px"
+            android:tint="#FFFFFF" />
+
+    </LinearLayout>
+
+    <!-- 内容区域 -->
+    <FrameLayout
+        android:id="@+id/content_container"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1">
+
+        <!-- 设置页面 -->
+        <include
+            android:id="@+id/content_settings"
+            layout="@layout/floating_settings_layout"
+            android:visibility="gone" />
+
+        <!-- 搜索页面 -->
+        <include
+            android:id="@+id/content_search"
+            layout="@layout/floating_search_layout"
+            android:visibility="gone" />
+
+        <!-- 保存的地址 -->
+        <include
+            android:id="@+id/content_saved_addresses"
+            layout="@layout/floating_saved_addresses_layout"
+            android:visibility="gone" />
+
+        <!-- 内存预览 -->
+        <include
+            android:id="@+id/content_memory_preview"
+            layout="@layout/floating_memory_preview_layout"
+            android:visibility="gone" />
+
+        <!-- 断点 -->
+        <include
+            android:id="@+id/content_breakpoints"
+            layout="@layout/floating_breakpoints_layout"
+            android:visibility="gone" />
+
+    </FrameLayout>
+
+    <LinearLayout
+        android:id="@+id/bottom_info_bar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="#1F1F1F"
+        android:gravity="center_vertical"
+        android:paddingStart="12dp"
+        android:paddingEnd="12dp">
+
+        <TextView
+            android:id="@+id/tv_selected_memory_ranges"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:ellipsize="end"
+            android:gravity="center"
+            android:singleLine="true"
+            android:text="Jh,Ch,Ca,Cb,Cd,Ps,A,Xs"
+            android:textColor="#FFFFFF"
+            android:textSize="14sp" />
+
+    </LinearLayout>
+
+</LinearLayout>

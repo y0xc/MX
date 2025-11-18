@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="@drawable/bg_process_item"
+    android:gravity="center_vertical"
+    android:orientation="horizontal"
+    android:padding="8dp">
+
+    <!-- App Icon -->
+    <ImageView
+        android:id="@+id/process_icon"
+        android:layout_width="32dp"
+        android:layout_height="32dp"
+        android:layout_marginEnd="8dp"
+        android:importantForAccessibility="no"
+        android:scaleType="centerCrop"
+        android:src="@mipmap/ic_launcher" />
+
+    <!-- PID -->
+    <TextView
+        android:id="@+id/process_details"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginEnd="4dp"
+        android:paddingEnd="4dp"
+        android:text="@string/placeholder_pid"
+        android:textColor="#00BCD4"
+        android:textSize="12sp"
+        android:textStyle="bold" />
+
+    <!-- Process Name -->
+    <TextView
+        android:id="@+id/process_name"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginEnd="4dp"
+        android:ellipsize="end"
+        android:maxLength="24"
+        android:maxLines="1"
+        android:paddingEnd="4dp"
+        android:text="@string/placeholder_process_name"
+        android:textColor="#FFFFFF"
+        android:textSize="13sp" />
+
+    <!-- Memory Usage -->
+    <TextView
+        android:id="@+id/process_rss"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:background="#1AFF9800"
+        android:paddingStart="4dp"
+        android:paddingEnd="4dp"
+        android:text="@string/placeholder_memory_size"
+        android:textColor="#FF9800"
+        android:textSize="11sp" />
+
+</LinearLayout>

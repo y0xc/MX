@@ -718,7 +718,7 @@ private fun WaitingConfirmContent(
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = "包括：查询所有应用包名、悬浮窗权限等",
+                        text = "包括：悬浮窗权限、外部存储访问权限等",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -1247,7 +1247,8 @@ private fun PreviewCompleted() {
                         StepState(SetupStep.CHECK_ROOT, StepStatus.COMPLETED),
                         StepState(SetupStep.CONFIRM_ROOT, StepStatus.COMPLETED),
                         StepState(SetupStep.GRANT_PERMISSIONS, StepStatus.COMPLETED),
-                        StepState(SetupStep.COMPLETED, StepStatus.COMPLETED)
+                        StepState(SetupStep.CHECK_DRIVER, StepStatus.COMPLETED),
+                        StepState(SetupStep.COMPLETED, StepStatus.COMPLETED),
                     ),
                     modifier = Modifier.padding(bottom = 24.dp)
                 )

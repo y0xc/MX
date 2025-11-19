@@ -3,6 +3,7 @@ package moe.fuqiuluo.mamu.utils
 import android.app.Application
 import android.content.Context
 import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Process
 import android.provider.Settings
 import android.util.Log
@@ -11,7 +12,6 @@ import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.coroutines.resume
-import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
 
 /**
@@ -19,17 +19,50 @@ import kotlin.time.Duration.Companion.seconds
  */
 object PermissionConfig {
     /**
-     * 应用需要通过root授予的权限列表
+     * 应用需要通过 pm grant 授予的运行时权限（Android 12 及以下）
+     * 注意：这里只包含可以通过 pm grant 授予的权限
      */
-    val REQUIRED_PERMISSIONS = listOf(
-        "android.permission.QUERY_ALL_PACKAGES"
+    private val LEGACY_STORAGE_PERMISSIONS = listOf(
+        "android.permission.READ_EXTERNAL_STORAGE",  // Android 12 及以下
+        "android.permission.WRITE_EXTERNAL_STORAGE"  // Android 12 及以下
     )
 
     /**
-     * 应用需要的AppOps权限
+     * Android 13+ 的媒体权限
+     */
+    private val MEDIA_PERMISSIONS_API_33 = listOf(
+        "android.permission.READ_MEDIA_IMAGES",   // 读取图片
+        "android.permission.READ_MEDIA_VIDEO",    // 读取视频
+        "android.permission.READ_MEDIA_AUDIO"     // 读取音频
+    )
+
+    /**
+     * 根据 Android 版本获取需要的存储权限
+     */
+    val REQUIRED_PERMISSIONS: List<String>
+        get() = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            // Android 13+: 使用细粒度媒体权限
+            MEDIA_PERMISSIONS_API_33
+        } else {
+            // Android 12 及以下: 使用传统存储权限
+            LEGACY_STORAGE_PERMISSIONS
+        }
+
+    /**
+     * 应用需要的 AppOps 权限
+     * 这些权限需要通过 appops set 命令授予
      */
     val REQUIRED_APP_OPS = listOf(
-        "SYSTEM_ALERT_WINDOW" // 悬浮窗权限
+        "SYSTEM_ALERT_WINDOW",           // 悬浮窗权限
+        "MANAGE_EXTERNAL_STORAGE"        // Android 11+ 所有文件访问权限
+    )
+
+    /**
+     * 安装时权限（在 AndroidManifest.xml 中声明后自动授予）
+     * 这些权限不需要运行时授权，只需要在 manifest 中声明即可
+     */
+    val INSTALL_TIME_PERMISSIONS = listOf(
+        "android.permission.QUERY_ALL_PACKAGES"  // 查询所有应用包名
     )
 }
 
@@ -105,7 +138,7 @@ object PermissionManager {
     private fun checkMissingPermissions(context: Context): List<String> {
         val missingPermissions = mutableListOf<String>()
 
-        // 检查普通权限
+        // 检查普通权限（pm grant 授予）
         for (permission in PermissionConfig.REQUIRED_PERMISSIONS) {
             if (context.checkPermission(
                     permission,
@@ -117,10 +150,19 @@ object PermissionManager {
             }
         }
 
-        // 检查悬浮窗权限（AppOps）
+        // 检查 AppOps 权限
+        // 1. 悬浮窗权限
         val hasOverlayPermission = Settings.canDrawOverlays(context)
         if (!hasOverlayPermission) {
             missingPermissions.add("SYSTEM_ALERT_WINDOW")
+        }
+
+        // 2. MANAGE_EXTERNAL_STORAGE 权限（Android 11+）
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            val hasManageStorage = android.os.Environment.isExternalStorageManager()
+            if (!hasManageStorage) {
+                missingPermissions.add("MANAGE_EXTERNAL_STORAGE")
+            }
         }
 
         return missingPermissions
@@ -145,7 +187,7 @@ object PermissionManager {
 
             // 授予普通权限
             PermissionConfig.REQUIRED_PERMISSIONS.forEachIndexed { index, permission ->
-                Log.d(TAG, "授权权限: $permission")
+                //Log.d(TAG, "授权权限: $permission")
                 val current = index + 1
                 onProgress(current, totalCount, permission)
 
@@ -160,7 +202,7 @@ object PermissionManager {
 
             // 授予AppOps权限
             PermissionConfig.REQUIRED_APP_OPS.forEachIndexed { index, appOp ->
-                Log.d(TAG, "授权 AppOp: $appOp")
+                //Log.d(TAG, "授权 AppOp: $appOp")
                 val current = PermissionConfig.REQUIRED_PERMISSIONS.size + index + 1
                 onProgress(current, totalCount, appOp)
 
@@ -195,11 +237,18 @@ object PermissionManager {
                     command = command,
                 ) { result ->
                     when (result) {
-                        is ShellResult.Success -> continuation.resume(true)
+                        is ShellResult.Success -> {
+                            Log.d(
+                                TAG,
+                                "Successfully grantPermission $permission, output: ${result.output}"
+                            )
+                            continuation.resume(true)
+                        }
+
                         is ShellResult.Error -> {
                             Log.e(
                                 TAG,
-                                "Failed to grant permission $permission: ${result.message}, code: ${result.exitCode}"
+                                "Failed to grantPermission $permission: ${result.message}, code: ${result.exitCode}"
                             )
                             continuation.resume(false)
                         }
@@ -234,11 +283,18 @@ object PermissionManager {
                     command = command
                 ) { result ->
                     when (result) {
-                        is ShellResult.Success -> continuation.resume(true)
+                        is ShellResult.Success -> {
+                            Log.d(
+                                TAG,
+                                "Successfully grantAppOp $appOp, output: ${result.output}"
+                            )
+                            continuation.resume(true)
+                        }
+
                         is ShellResult.Error -> {
                             Log.e(
                                 TAG,
-                                "Failed to grant AppOp $appOp: ${result.message}, code: ${result.exitCode}"
+                                "Failed to grantAppOp $appOp: ${result.message}, code: ${result.exitCode}"
                             )
                             continuation.resume(false)
                         }

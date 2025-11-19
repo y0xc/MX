@@ -173,7 +173,7 @@ class PermissionSetupViewModel(application: Application) : AndroidViewModel(appl
                 val (grantedCount, totalCount) = PermissionManager.grantAllPermissions(
                     app = getApplication(),
                     onProgress = { current, total, permissionName ->
-                        Log.d(TAG, "授权进度条: $current/$total - $permissionName")
+                        // Log.d(TAG, "授权进度条: $current/$total - $permissionName")
                         // 更新UI状态
                         viewModelScope.launch(Dispatchers.Main) {
                             _state.value = PermissionSetupState.GrantingPermissions(

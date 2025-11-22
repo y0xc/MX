@@ -33,7 +33,7 @@ impl PartialOrd<Self> for ValuePair {
 }
 
 impl Ord for ValuePair {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+    fn cmp(&self, other: &Self) -> Ordering {
         self.addr.cmp(&other.addr)
     }
 }

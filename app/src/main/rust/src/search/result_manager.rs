@@ -25,6 +25,16 @@ pub enum SearchResultItem {
     Fuzzy(FuzzySearchResultItem),
 }
 
+impl SearchResultItem {
+    pub fn new_exact(address: u64, value_type: ValueType) -> Self {
+        SearchResultItem::Exact(ExactSearchResultItem::new(address, value_type))
+    }
+    
+    pub fn new_fuzzy(address: u64, fuzzy_value: FuzzyValue) -> Self {
+        SearchResultItem::Fuzzy(FuzzySearchResultItem::new(address, fuzzy_value))
+    }
+}
+
 impl From<(u64, ValueType)> for SearchResultItem {
     fn from(tuple: (u64, ValueType)) -> Self {
         SearchResultItem::Exact(ExactSearchResultItem::from(tuple))

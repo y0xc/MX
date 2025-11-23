@@ -8,6 +8,12 @@ pub struct FuzzySearchResultItem {
 }
 
 impl FuzzySearchResultItem {
+    pub fn new(address: u64, value: FuzzyValue) -> Self {
+        FuzzySearchResultItem { address, value }
+    }
+}
+
+impl FuzzySearchResultItem {
     pub fn typ(&self) -> ValueType {
         match self.value { 
             FuzzyValue::I8(_) => ValueType::Byte,

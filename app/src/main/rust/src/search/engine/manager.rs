@@ -1,6 +1,3 @@
-use crate::core::DRIVER_MANAGER;
-use crate::wuwa::PageStatusBitmap;
-
 use super::super::SearchResultItem;
 use super::super::result_manager::{SearchResultManager, SearchResultMode};
 use super::super::types::{SearchQuery, ValueType};
@@ -10,12 +7,13 @@ use super::single_search;
 use anyhow::{Result, anyhow};
 use bplustree::BPlusTreeSet;
 use lazy_static::lazy_static;
-use log::{Level, error, info, log_enabled};
+use log::{Level, error, log_enabled};
 use rayon::prelude::*;
 use std::cmp::Ordering;
 use std::path::PathBuf;
 use std::sync::{Arc, RwLock};
 use std::time::Instant;
+use crate::search::result_manager::ExactSearchResultItem;
 
 /// 地址和值类型对
 /// 用于存储搜索结果中的地址和值类型信息
@@ -175,7 +173,7 @@ impl SearchEngineManager {
         let final_count = result_mgr.total_count();
 
         if log_enabled!(Level::Debug) {
-            info!("Search completed: {} results in {} ms", final_count, elapsed);
+            log::info!("Search completed: {} results in {} ms", final_count, elapsed);
         }
 
         // 是否实现一个更丰富的回调接口？例如搜索进度之类的，问题上jvm的native调用会要求持有native lock
@@ -290,12 +288,13 @@ impl SearchEngineManager {
             .result_manager
             .as_mut()
             .ok_or_else(|| anyhow!("SearchEngineManager not initialized"))?;
-        let driver_manager = DRIVER_MANAGER
-            .read()
-            .map_err(|_| anyhow!("Failed to acquire DriverManager lock"))?;
 
-        let current_results = match result_mgr.get_mode() {
-            SearchResultMode::Exact => result_mgr.get_all_exact_results()?,
+        let current_results: Vec<_> = match result_mgr.get_mode() {
+            SearchResultMode::Exact => result_mgr
+                .get_all_exact_results()?
+                .into_iter()
+                .map(|result| ValuePair::new(result.address, result.typ))
+                .collect(),
             SearchResultMode::Fuzzy => {
                 todo!("FuzzySearchResultManager not implemented yet");
             },
@@ -320,55 +319,32 @@ impl SearchEngineManager {
         result_mgr.clear()?;
         result_mgr.set_mode(SearchResultMode::Exact)?;
 
-        let is_group_search = query.values.len() > 1;
+        // 判断是单值搜索还是组搜索
+        if query.values.len() == 1 {
+            let refined_results = single_search::refine_single_search(
+                &current_results,
+                &query.values[0],
+            )?;
 
-        // Process each address
-        for exact_item in current_results {
-            let addr = exact_item.address;
-            let value_type = exact_item.typ;
+            if !refined_results.is_empty() {
+                let converted_results: Vec<SearchResultItem> = refined_results
+                    .into_iter()
+                    .map(|pair| SearchResultItem::new_exact(pair.addr, pair.value_type))
+                    .collect();
+                result_mgr.add_results_batch(converted_results)?;
+            }
+        } else {
+            let refined_results = group_search::refine_search_group_with_dfs(
+                &current_results,
+                query,
+            )?;
 
-            // Determine buffer size based on search type
-            let buffer_size = if is_group_search {
-                // For group search, we need enough space for all values plus range
-                query.total_size() + query.range as usize
-            } else {
-                // For single value search, just need the value size
-                value_type.size()
-            };
-
-            let mut buffer = vec![0u8; buffer_size];
-            let mut page_status = PageStatusBitmap::new(buffer_size, addr as usize);
-
-            let read_result = driver_manager.read_memory_unified(addr, &mut buffer, Some(&mut page_status));
-
-            // Read memory at this address
-            match read_result {
-                Ok(_) => {
-                    // Check if the value matches the search query
-                    let matched = if is_group_search {
-                        // For group search, try to match the group pattern
-                        group_search::try_match_group_at_address(&buffer, addr, query).is_some()
-                    } else {
-                        // For single value search, use the matched() method
-                        match query.values[0].matched(&buffer) {
-                            Ok(result) => result,
-                            Err(e) => {
-                                log::warn!("Failed to match value at 0x{:X}: {:?}", addr, e);
-                                false
-                            },
-                        }
-                    };
-
-                    if matched {
-                        // Keep this result
-                        let result_item = SearchResultItem::Exact(exact_item);
-                        result_mgr.add_result(result_item)?;
-                    }
-                },
-                Err(e) => {
-                    // Address is no longer valid, skip it
-                    log::trace!("Failed to read memory at 0x{:X}: {:?}", addr, e);
-                },
+            if !refined_results.is_empty() {
+                let converted_results: Vec<SearchResultItem> = refined_results
+                    .into_iter()
+                    .map(|pair| SearchResultItem::new_exact(pair.addr, pair.value_type))
+                    .collect();
+                result_mgr.add_results_batch(converted_results)?;
             }
         }
 

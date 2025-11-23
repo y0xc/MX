@@ -529,3 +529,170 @@ pub(crate) fn try_match_unordered(buffer: &[u8], _start_addr: u64, query: &Searc
         None
     }
 }
+
+/// 使用 DFS 算法对已有搜索结果进行组搜索改善
+///
+/// 在已有的搜索结果中，找到所有满足组搜索条件的地址组合
+/// 使用深度优先搜索 (DFS) 回溯算法，可以找到所有可能的有效组合
+///
+/// # 参数
+/// - `existing_results`: 已有的搜索结果集合 (B+树，已按地址排序)
+/// - `query`: 组搜索查询条件
+///
+/// # 返回值
+/// 返回满足条件的所有地址的集合
+pub(crate) fn refine_search_group_with_dfs(
+    existing_results: &Vec<ValuePair>,
+    query: &SearchQuery,
+) -> Result<BPlusTreeSet<ValuePair>> {
+    use std::collections::HashSet;
+
+    let driver_manager = DRIVER_MANAGER
+        .read()
+        .map_err(|_| anyhow!("Failed to acquire DriverManager lock"))?;
+
+    let mut refined_results = BPlusTreeSet::new(BPLUS_TREE_ORDER);
+
+    if query.values.is_empty() {
+        return Ok(refined_results);
+    }
+
+    // 读取全部地址与当前值
+    let mut addr_values: Vec<(u64, Vec<u8>)> = Vec::with_capacity(existing_results.len());
+    for pair in existing_results.iter() {
+        let addr = pair.addr;
+        let value_size = pair.value_type.size();
+        let mut buffer = vec![0u8; value_size];
+
+        if driver_manager.read_memory_unified(addr, &mut buffer, None).is_ok() {
+            addr_values.push((addr, buffer));
+        }
+    }
+
+    if addr_values.is_empty() {
+        return Ok(refined_results);
+    }
+
+    // 找所有锚点
+    let mut anchors = Vec::new();
+    for (addr, bytes) in &addr_values {
+        if query.values[0].matched(bytes).unwrap_or(false) {
+            anchors.push(*addr);
+        }
+    }
+
+    if anchors.is_empty() {
+        return Ok(refined_results);
+    }
+
+    if query.values.len() == 1 {
+        // 单值改善, 直接返回锚点结果
+        let value_type = query.values[0].value_type();
+        for anchor_addr in anchors {
+            refined_results.insert(ValuePair::new(anchor_addr, value_type));
+        }
+        return Ok(refined_results);
+    }
+
+    // 主循环：每个锚点执行 DFS
+    for anchor_addr in anchors {
+        let (min_addr, max_addr) = match query.mode {
+            SearchMode::Unordered => (
+                anchor_addr.saturating_sub(query.range as u64),
+                anchor_addr + query.range as u64,
+            ),
+            SearchMode::Ordered => (anchor_addr, anchor_addr + query.range as u64),
+        };
+
+        // 候选（不含锚点本身，避免重复使用）
+        let mut candidates: Vec<(u64, &Vec<u8>)> = Vec::new();
+        for (addr, bytes) in &addr_values {
+            if *addr >= min_addr && *addr <= max_addr && *addr != anchor_addr {
+                candidates.push((*addr, bytes));
+            }
+        }
+
+        // 剪枝：如果候选数量 < (query.values.len() - 1) 不可能成功
+        if candidates.len() < query.values.len() - 1 {
+            continue;
+        }
+
+        // DFS：寻找所有满足的组合
+        let mut used: HashSet<u64> = HashSet::new();
+        used.insert(anchor_addr);
+
+        // 当前选择的地址（含锚点）
+        let mut chosen: Vec<(u64, ValueType)> = Vec::with_capacity(query.values.len());
+        chosen.push((anchor_addr, query.values[0].value_type()));
+
+        // 回溯函数
+        fn dfs(
+            cand_idx: usize,
+            candidates: &[(u64, &Vec<u8>)],
+            query: &SearchQuery,
+            chosen: &mut Vec<(u64, ValueType)>,
+            used: &mut HashSet<u64>,
+            refined_results: &mut BPlusTreeSet<ValuePair>,
+        ) -> Result<()> {
+            let need_total = query.values.len();
+            let have = chosen.len();
+
+            // 成功匹配全部查询值
+            if have == need_total {
+                for (addr, vt) in chosen.iter() {
+                    refined_results.insert(ValuePair::new(*addr, *vt));
+                }
+                return Ok(());
+            }
+
+            // 剩余还需要匹配的查询值数量
+            let remaining_need = need_total - have;
+
+            // 剩余候选是否足够（剪枝）
+            let remaining_candidates = candidates.len().saturating_sub(cand_idx);
+            if remaining_candidates < remaining_need {
+                return Ok(());
+            }
+
+            // 当前要匹配的查询值
+            let sv = &query.values[have];
+
+            // 遍历从 cand_idx 开始的候选
+            for i in cand_idx..candidates.len() {
+                let (addr, bytes) = candidates[i];
+
+                // 安全检查：确保缓冲区大小足够
+                if sv.value_type().size() > bytes.len() {
+                    continue;
+                }
+
+                // 如果不匹配则跳过
+                if !sv.matched(bytes).unwrap_or(false) {
+                    continue;
+                }
+
+                // 地址唯一约束
+                if used.contains(&addr) {
+                    continue;
+                }
+
+                // 选择
+                used.insert(addr);
+                chosen.push((addr, sv.value_type()));
+
+                // 下一层从 i+1 开始（保证组合不重复）
+                dfs(i + 1, candidates, query, chosen, used, refined_results)?;
+
+                // 回溯
+                chosen.pop();
+                used.remove(&addr);
+            }
+
+            Ok(())
+        }
+
+        dfs(0, &candidates, query, &mut chosen, &mut used, &mut refined_results)?;
+    }
+
+    Ok(refined_results)
+}

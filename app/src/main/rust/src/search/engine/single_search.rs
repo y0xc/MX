@@ -150,3 +150,69 @@ pub(crate) fn search_in_buffer_with_status(
         addr += element_size as u64;
     }
 }
+
+/// 单值细化搜索
+/// 逐个读取地址的值，再用rayon并行判断
+/// 返回仍然匹配的地址列表
+pub(crate) fn refine_single_search(
+    addresses: &[ValuePair],
+    target: &SearchValue,
+) -> Result<Vec<ValuePair>> {
+    use rayon::prelude::*;
+
+    if addresses.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let driver_manager = DRIVER_MANAGER
+        .read()
+        .map_err(|_| anyhow!("Failed to acquire DriverManager lock"))?;
+
+    let target_type = target.value_type();
+    let element_size = target_type.size();
+
+    // 过滤类型不匹配的地址
+    let filtered_addresses: Vec<_> = addresses
+        .iter()
+        .filter(|p| p.value_type == target_type)
+        .cloned()
+        .collect();
+
+    if filtered_addresses.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    // 逐个读取每个地址的值
+    let mut address_values: Vec<(ValuePair, Vec<u8>)> = Vec::with_capacity(filtered_addresses.len());
+
+    for pair in &filtered_addresses {
+        let mut buffer = vec![0u8; element_size];
+        if driver_manager.read_memory_unified(pair.addr, &mut buffer, None).is_ok() {
+            address_values.push((pair.clone(), buffer));
+        }
+    }
+
+    drop(driver_manager);
+
+    // 用rayon并行判断
+    let results: Vec<ValuePair> = address_values
+        .into_par_iter()
+        .filter_map(|(pair, bytes)| {
+            if let Ok(true) = target.matched(&bytes) {
+                Some(pair)
+            } else {
+                None
+            }
+        })
+        .collect();
+
+    if log_enabled!(Level::Debug) {
+        debug!(
+            "Refine single search: {} -> {} results",
+            filtered_addresses.len(),
+            results.len()
+        );
+    }
+
+    Ok(results)
+}

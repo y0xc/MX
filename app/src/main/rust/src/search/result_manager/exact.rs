@@ -12,12 +12,15 @@ pub struct ExactSearchResultItem {
     pub typ: ValueType,
 }
 
+impl ExactSearchResultItem {
+    pub fn new(address: u64, typ: ValueType) -> Self {
+        ExactSearchResultItem { address, typ }
+    }
+}
+
 impl From<(u64, ValueType)> for ExactSearchResultItem {
     fn from(tuple: (u64, ValueType)) -> Self {
-        ExactSearchResultItem {
-            address: tuple.0,
-            typ: tuple.1,
-        }
+        Self::new(tuple.0, tuple.1)
     }
 }
 

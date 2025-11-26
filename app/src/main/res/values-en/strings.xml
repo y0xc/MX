@@ -188,6 +188,12 @@
     <string name="button_skip">Skip</string>
     <string name="button_allow">Allow</string>
 
+    <!-- Foreground Service Notification -->
+    <string name="notification_channel_name">Floating Window Service</string>
+    <string name="notification_channel_description">Keep floating window service running in background</string>
+    <string name="notification_title">Mamu Floating Window Active</string>
+    <string name="notification_text">Tap to return to app</string>
+
     <!-- Home Screen -->
     <string name="home_title">Mamu</string>
     <string name="home_refresh">Refresh</string>

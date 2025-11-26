@@ -28,12 +28,13 @@ object PermissionConfig {
     )
 
     /**
-     * Android 13+ 的媒体权限
+     * Android 13+ 的媒体权限和通知权限
      */
     private val MEDIA_PERMISSIONS_API_33 = listOf(
         "android.permission.READ_MEDIA_IMAGES",   // 读取图片
         "android.permission.READ_MEDIA_VIDEO",    // 读取视频
-        "android.permission.READ_MEDIA_AUDIO"     // 读取音频
+        "android.permission.READ_MEDIA_AUDIO",    // 读取音频
+        "android.permission.POST_NOTIFICATIONS"   // 发送通知
     )
 
     /**

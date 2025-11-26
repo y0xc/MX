@@ -6,7 +6,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.*
 import moe.fuqiuluo.mamu.ui.screen.HomeScreen
-import moe.fuqiuluo.mamu.ui.theme.MXTheme
+import moe.fuqiuluo.mamu.ui.theme.MXTheme   
 import moe.fuqiuluo.mamu.ui.tutorial.screen.TutorialPracticeScreen
 
 class MainActivity : ComponentActivity() {

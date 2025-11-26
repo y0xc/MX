@@ -3,6 +3,7 @@ package moe.fuqiuluo.mamu.ui.screen
 import android.content.Context
 import android.content.Intent
 import android.content.res.Configuration
+import android.os.Build
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -52,7 +53,11 @@ fun HomeScreen(
                     // 启动悬浮窗
                     if (!uiState.isFloatingWindowActive) {
                         val intent = Intent(context, FloatingWindowService::class.java)
-                        context.startService(intent)
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                            context.startForegroundService(intent)
+                        } else {
+                            context.startService(intent)
+                        }
                     }
                     onStartPractice()
                 }
@@ -164,7 +169,11 @@ private fun toggleFloatingWindow(context: Context, isActive: Boolean) {
     } else {
         // 启动悬浮窗
         val intent = Intent(context, FloatingWindowService::class.java)
-        context.startService(intent)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            context.startForegroundService(intent)
+        } else {
+            context.startService(intent)
+        }
     }
 }
 

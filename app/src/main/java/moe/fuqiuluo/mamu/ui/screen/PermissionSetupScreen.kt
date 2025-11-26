@@ -72,9 +72,6 @@ import moe.fuqiuluo.mamu.utils.RootConfigManager
 import moe.fuqiuluo.mamu.viewmodel.PermissionSetupState
 import moe.fuqiuluo.mamu.viewmodel.PermissionSetupViewModel
 
-// ============================================
-// Setup Step Definitions
-// ============================================
 
 private enum class SetupStep(
     val title: String,
@@ -119,10 +116,6 @@ private data class StepState(
     val step: SetupStep,
     val status: StepStatus
 )
-
-// ============================================
-// Main Screen
-// ============================================
 
 @Composable
 fun PermissionSetupScreen(
@@ -198,10 +191,6 @@ fun PermissionSetupScreen(
         }
     }
 }
-
-// ============================================
-// Step State Calculation
-// ============================================
 
 @Composable
 private fun calculateStepStates(state: PermissionSetupState): List<StepState> {
@@ -287,10 +276,6 @@ private fun calculateStepStates(state: PermissionSetupState): List<StepState> {
         )
     }
 }
-
-// ============================================
-// Vertical Stepper Component
-// ============================================
 
 @Composable
 private fun VerticalStepper(
@@ -510,10 +495,6 @@ private fun StepItem(
     }
 }
 
-// ============================================
-// Step Content (Detail View)
-// ============================================
-
 @Composable
 private fun StepContent(
     state: PermissionSetupState,
@@ -577,10 +558,6 @@ private fun StepContent(
         }
     }
 }
-
-// ============================================
-// Content Components
-// ============================================
 
 @Composable
 private fun InitializingContent() {
@@ -1092,10 +1069,6 @@ private fun ErrorContent(
         }
     }
 }
-
-// ============================================
-// Preview Functions
-// ============================================
 
 @Preview(
     name = "Light Mode",

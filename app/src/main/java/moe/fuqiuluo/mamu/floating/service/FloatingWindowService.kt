@@ -1,6 +1,10 @@
 package moe.fuqiuluo.mamu.floating.service
 
 import android.annotation.SuppressLint
+import android.app.Notification
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
 import android.app.Service
 import android.content.ClipboardManager
 import android.content.Intent
@@ -8,6 +12,7 @@ import android.content.res.Configuration
 import android.graphics.PixelFormat
 import android.os.Build
 import android.os.IBinder
+import androidx.core.app.NotificationCompat
 import android.text.SpannableString
 import android.text.Spanned
 import android.text.style.ForegroundColorSpan
@@ -37,6 +42,8 @@ import moe.fuqiuluo.mamu.floating.model.DisplayProcessInfo
 import moe.fuqiuluo.mamu.widget.*
 
 private const val TAG = "FloatingWindowService"
+private const val NOTIFICATION_ID = 1001
+private const val CHANNEL_ID = "floating_window_service"
 
 class FloatingWindowService : Service(), ProcessDeathMonitor.Callback {
     // 窗口管理器
@@ -71,6 +78,11 @@ class FloatingWindowService : Service(), ProcessDeathMonitor.Callback {
     @SuppressLint("ClickableViewAccessibility")
     override fun onCreate() {
         super.onCreate()
+
+        // 创建前台服务通知
+        createNotificationChannel()
+        val notification = createForegroundNotification()
+        startForeground(NOTIFICATION_ID, notification)
 
         windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
 
@@ -339,6 +351,46 @@ class FloatingWindowService : Service(), ProcessDeathMonitor.Callback {
     }
 
     private fun adjustLayoutForOrientation(orientation: Int) {
+    }
+
+    private fun createNotificationChannel() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(
+                CHANNEL_ID,
+                getString(R.string.notification_channel_name),
+                NotificationManager.IMPORTANCE_LOW
+            ).apply {
+                description = getString(R.string.notification_channel_description)
+                setShowBadge(false)
+                enableLights(false)
+                enableVibration(false)
+            }
+
+            val notificationManager = getSystemService(NotificationManager::class.java)
+            notificationManager.createNotificationChannel(channel)
+        }
+    }
+
+    private fun createForegroundNotification(): Notification {
+        val intent = Intent(this, moe.fuqiuluo.mamu.MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
+        }
+        val pendingIntent = PendingIntent.getActivity(
+            this,
+            0,
+            intent,
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
+
+        return NotificationCompat.Builder(this, CHANNEL_ID)
+            .setContentTitle(getString(R.string.notification_title))
+            .setContentText(getString(R.string.notification_text))
+            .setSmallIcon(R.mipmap.ic_launcher)
+            .setContentIntent(pendingIntent)
+            .setOngoing(true)
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setCategory(NotificationCompat.CATEGORY_SERVICE)
+            .build()
     }
 
     override fun onDestroy() {

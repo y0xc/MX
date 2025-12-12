@@ -29,6 +29,8 @@ class SearchResultAdapter(
     private val selectedPositions = mutableSetOf<Int>()
     // 内存范围列表 (保存主要是为了显示内存范围简称和颜色)
     private var ranges: List<DisplayMemRegionEntry>? = null
+    // 预排序的范围列表，用于二分查找 (按 start 地址排序)
+    private var sortedRanges: List<DisplayMemRegionEntry>? = null
 
     init {
         // 启用稳定ID，提升RecyclerView刷新性能
@@ -102,6 +104,44 @@ class SearchResultAdapter(
      */
     fun setRanges(newRanges: List<DisplayMemRegionEntry>?) {
         ranges = newRanges
+        // 预排序用于二分查找，避免每次 ViewHolder 绑定时 O(n) 线性查找
+        sortedRanges = newRanges?.sortedBy { it.start }
+    }
+
+    /**
+     * 使用二分查找定位地址所属的内存范围
+     * 时间复杂度: O(log n)，相比之前的 O(n) 线性查找大幅提升
+     *
+     * @param address 要查找的地址
+     * @return 对应的 MemoryRange，找不到返回 MemoryRange.O
+     */
+    private fun findMemoryRangeByAddress(address: Long): MemoryRange {
+        val sorted = sortedRanges ?: return MemoryRange.O
+        if (sorted.isEmpty()) return MemoryRange.O
+
+        // 二分查找：找到最后一个 start <= address 的范围
+        var low = 0
+        var high = sorted.size - 1
+        var result: DisplayMemRegionEntry? = null
+
+        while (low <= high) {
+            val mid = (low + high) ushr 1
+            val midEntry = sorted[mid]
+
+            if (midEntry.start <= address) {
+                result = midEntry
+                low = mid + 1  // 继续向右找，看是否有更接近的
+            } else {
+                high = mid - 1
+            }
+        }
+
+        // 检查找到的范围是否真的包含该地址
+        return if (result != null && result.containsAddress(address)) {
+            result.range
+        } else {
+            MemoryRange.O
+        }
     }
 
     /**
@@ -152,7 +192,7 @@ class SearchResultAdapter(
     }
 
     /**
-     * 全选 - 使用notifyDataSetChanged避免遍历大量item
+     * 全选 - 使用 payload 只更新选择状态，避免完全重绑定导致的闪烁
      */
     fun selectAll() {
         if (selectedPositions.size == results.size) {
@@ -163,13 +203,14 @@ class SearchResultAdapter(
         selectedPositions.clear()
         selectedPositions.addAll(results.indices)
 
-        // 大数据量时，notifyDataSetChanged只刷新可见区域，反而比notifyItemRangeChanged更快
-        notifyDataSetChanged()
+        // 使用 payload 机制：只触发 onBindViewHolder 的 payload 分支
+        // 这样只更新 checkbox 状态，不重新绑定其他内容，避免闪烁
+        notifyItemRangeChanged(0, results.size, PAYLOAD_SELECTION_CHANGED)
         onSelectionChanged(selectedPositions.size)
     }
 
     /**
-     * 全不选 - 使用notifyDataSetChanged避免遍历大量item
+     * 全不选 - 使用 payload 只更新选择状态，避免完全重绑定导致的闪烁
      */
     fun deselectAll() {
         if (selectedPositions.isEmpty()) {
@@ -178,13 +219,13 @@ class SearchResultAdapter(
         }
 
         selectedPositions.clear()
-        // 大数据量时，notifyDataSetChanged只刷新可见区域，反而比notifyItemRangeChanged更快
-        notifyDataSetChanged()
+        // 使用 payload 机制，只更新选择状态
+        notifyItemRangeChanged(0, results.size, PAYLOAD_SELECTION_CHANGED)
         onSelectionChanged(0)
     }
 
     /**
-     * 反选 - 优化版本，避免创建大型临时集合
+     * 反选 - 使用 payload 只更新选择状态，避免完全重绑定导致的闪烁
      */
     fun invertSelection() {
         val totalSize = results.size
@@ -201,8 +242,8 @@ class SearchResultAdapter(
         selectedPositions.clear()
         selectedPositions.addAll(newSelection)
 
-        // 大数据量时，notifyDataSetChanged只刷新可见区域，反而比notifyItemRangeChanged更快
-        notifyDataSetChanged()
+        // 使用 payload 机制，只更新选择状态
+        notifyItemRangeChanged(0, totalSize, PAYLOAD_SELECTION_CHANGED)
         onSelectionChanged(selectedPositions.size)
     }
 
@@ -272,9 +313,8 @@ class SearchResultAdapter(
                             setTextColor(valueType.textColor)
                         }
 
-                        // 内存范围简称和颜色
-                        val memoryRange = ranges?.firstOrNull { it.containsAddress(item.address) }?.range
-                            ?: MemoryRange.O
+                        // 内存范围简称和颜色 - 使用二分查找 O(log n) 替代线性查找 O(n)
+                        val memoryRange = findMemoryRangeByAddress(item.address)
                         rangeText.apply {
                             text = memoryRange.code
                             setTextColor(memoryRange.color)
@@ -306,9 +346,8 @@ class SearchResultAdapter(
                             setTextColor(valueType.textColor)
                         }
 
-                        // 内存范围简称和颜色
-                        val memoryRange = ranges?.firstOrNull { it.containsAddress(item.address) }?.range
-                            ?: MemoryRange.O
+                        // 内存范围简称和颜色 - 使用二分查找 O(log n) 替代线性查找 O(n)
+                        val memoryRange = findMemoryRangeByAddress(item.address)
                         rangeText.apply {
                             text = memoryRange.code
                             setTextColor(memoryRange.color)

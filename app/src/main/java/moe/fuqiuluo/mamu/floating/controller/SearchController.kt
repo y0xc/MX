@@ -5,6 +5,7 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.view.View
 import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.SimpleItemAnimator
 import com.tencent.mmkv.MMKV
 import kotlinx.coroutines.*
 import moe.fuqiuluo.mamu.R
@@ -224,6 +225,12 @@ class SearchController(
 
             // 性能优化：设置固定大小，避免每次数据变化都重新测量
             setHasFixedSize(true)
+
+            // 性能优化：禁用变化动画，避免全选/反选时的闪烁和卡顿
+            // 参考: https://github.com/wasabeef/recyclerview-animators/issues/47
+            if (itemAnimator != null && itemAnimator is SimpleItemAnimator) {
+                (itemAnimator as? SimpleItemAnimator)?.supportsChangeAnimations = false
+            }
         }
     }
 
@@ -572,20 +579,32 @@ class SearchController(
                         searchResultAdapter.updateItemValueByAddress(address, newValue)
 
                         notification.showSuccess(
-                            context.getString(R.string.modify_success_message, String.format("%X", address))
+                            context.getString(
+                                R.string.modify_success_message,
+                                String.format("%X", address)
+                            )
                         )
                     } else {
                         notification.showError(
-                            context.getString(R.string.modify_failed_message, String.format("%X", address))
+                            context.getString(
+                                R.string.modify_failed_message,
+                                String.format("%X", address)
+                            )
                         )
                     }
                 } catch (e: IllegalArgumentException) {
                     notification.showError(
-                        context.getString(R.string.error_invalid_value_format, e.message ?: "Unknown error")
+                        context.getString(
+                            R.string.error_invalid_value_format,
+                            e.message ?: "Unknown error"
+                        )
                     )
                 } catch (e: Exception) {
                     notification.showError(
-                        context.getString(R.string.error_modify_failed, e.message ?: "Unknown error")
+                        context.getString(
+                            R.string.error_modify_failed,
+                            e.message ?: "Unknown error"
+                        )
                     )
                 }
             }
@@ -645,7 +664,10 @@ class SearchController(
                                 if (success) {
                                     // 更新UI (需要在主线程)
                                     withContext(Dispatchers.Main) {
-                                        searchResultAdapter.updateItemValueByAddress(address, newValue)
+                                        searchResultAdapter.updateItemValueByAddress(
+                                            address,
+                                            newValue
+                                        )
                                     }
                                     successCount++
                                 } else {
@@ -665,7 +687,10 @@ class SearchController(
                     }
                 } catch (e: IllegalArgumentException) {
                     notification.showError(
-                        context.getString(R.string.error_invalid_value_format, e.message ?: "Unknown error")
+                        context.getString(
+                            R.string.error_invalid_value_format,
+                            e.message ?: "Unknown error"
+                        )
                     )
                 } catch (e: Exception) {
                     notification.showError(

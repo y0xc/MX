@@ -75,6 +75,38 @@ class FloatingWindowService : Service(), ProcessDeathMonitor.Callback {
     // 缓存屏幕方向，避免重复调整布局
     private var currentOrientation = Configuration.ORIENTATION_UNDEFINED
 
+    // 预创建动画对象，避免在动画期间频繁分配内存
+    // Android 官方文档: "请在初始化期间或动画之间分配对象。切勿在动画运行期间进行分配。"
+    private val sharedInterpolator = AccelerateDecelerateInterpolator()
+
+    // Tab 指示器动画 (100ms)
+    private val indicatorFadeIn by lazy {
+        AlphaAnimation(0f, 1f).apply {
+            duration = 100
+            interpolator = sharedInterpolator
+        }
+    }
+    private val indicatorFadeOut by lazy {
+        AlphaAnimation(1f, 0f).apply {
+            duration = 100
+            interpolator = sharedInterpolator
+        }
+    }
+
+    // 内容切换动画 (80ms)
+    private val contentFadeIn by lazy {
+        AlphaAnimation(0f, 1f).apply {
+            duration = 80
+            interpolator = sharedInterpolator
+        }
+    }
+    private val contentFadeOut by lazy {
+        AlphaAnimation(1f, 0f).apply {
+            duration = 80
+            interpolator = sharedInterpolator
+        }
+    }
+
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -131,7 +163,9 @@ class FloatingWindowService : Service(), ProcessDeathMonitor.Callback {
             iconSizePx,
             iconSizePx,
             layoutFlag,
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
+            // 启用硬件加速以提升渲染性能
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED,
             PixelFormat.TRANSLUCENT
         )
 
@@ -192,7 +226,9 @@ class FloatingWindowService : Service(), ProcessDeathMonitor.Callback {
             WindowManager.LayoutParams.MATCH_PARENT,
             WindowManager.LayoutParams.MATCH_PARENT,
             layoutFlag,
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
+            // 启用硬件加速以提升渲染性能
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED,
             PixelFormat.TRANSLUCENT
         )
 
@@ -491,28 +527,23 @@ class FloatingWindowService : Service(), ProcessDeathMonitor.Callback {
                 indicators.forEach { (indicatorId, indicator) ->
                     if (indicatorId == activeIndicatorId) {
                         if (indicator.visibility != View.VISIBLE) {
-                            val fadeIn = AlphaAnimation(0f, 1f).apply {
-                                duration = 100
-                                interpolator = AccelerateDecelerateInterpolator()
-                            }
+                            // 复用预创建的动画对象
+                            indicatorFadeIn.reset()
                             indicator.visibility = View.VISIBLE
-                            indicator.startAnimation(fadeIn)
+                            indicator.startAnimation(indicatorFadeIn)
                         }
                     } else {
                         if (indicator.isVisible) {
-                            val fadeOut = AlphaAnimation(1f, 0f).apply {
-                                duration = 100
-                                interpolator = AccelerateDecelerateInterpolator()
-                                setAnimationListener(object : Animation.AnimationListener {
-                                    override fun onAnimationStart(animation: Animation?) {}
-                                    override fun onAnimationEnd(animation: Animation?) {
-                                        indicator.visibility = View.GONE
-                                    }
-
-                                    override fun onAnimationRepeat(animation: Animation?) {}
-                                })
-                            }
-                            indicator.startAnimation(fadeOut)
+                            // 使用 animate() API 代替 Animation，更高效且自动管理生命周期
+                            indicator.animate()
+                                .alpha(0f)
+                                .setDuration(100)
+                                .setInterpolator(sharedInterpolator)
+                                .withEndAction {
+                                    indicator.visibility = View.GONE
+                                    indicator.alpha = 1f  // 重置 alpha 供下次使用
+                                }
+                                .start()
                         }
                     }
                 }
@@ -543,33 +574,32 @@ class FloatingWindowService : Service(), ProcessDeathMonitor.Callback {
 
         if (enableAnimation) {
             currentVisibleView?.let { current ->
-                val fadeOut = AlphaAnimation(1f, 0f).apply {
-                    duration = 80
-                    interpolator = AccelerateDecelerateInterpolator()
-                    setAnimationListener(object : Animation.AnimationListener {
-                        override fun onAnimationStart(animation: Animation?) {}
-                        override fun onAnimationEnd(animation: Animation?) {
-                            current.visibility = View.GONE
+                // 使用 View.animate() API，更高效且无需频繁创建对象
+                current.animate()
+                    .alpha(0f)
+                    .setDuration(80)
+                    .setInterpolator(sharedInterpolator)
+                    .withEndAction {
+                        current.visibility = View.GONE
+                        current.alpha = 1f  // 重置 alpha
 
-                            val fadeIn = AlphaAnimation(0f, 1f).apply {
-                                duration = 80
-                                interpolator = AccelerateDecelerateInterpolator()
-                            }
-                            targetView.visibility = View.VISIBLE
-                            targetView.startAnimation(fadeIn)
-                        }
-
-                        override fun onAnimationRepeat(animation: Animation?) {}
-                    })
-                }
-                current.startAnimation(fadeOut)
+                        targetView.alpha = 0f
+                        targetView.visibility = View.VISIBLE
+                        targetView.animate()
+                            .alpha(1f)
+                            .setDuration(80)
+                            .setInterpolator(sharedInterpolator)
+                            .start()
+                    }
+                    .start()
             } ?: run {
-                val fadeIn = AlphaAnimation(0f, 1f).apply {
-                    duration = 80
-                    interpolator = AccelerateDecelerateInterpolator()
-                }
+                targetView.alpha = 0f
                 targetView.visibility = View.VISIBLE
-                targetView.startAnimation(fadeIn)
+                targetView.animate()
+                    .alpha(1f)
+                    .setDuration(80)
+                    .setInterpolator(sharedInterpolator)
+                    .start()
             }
         } else {
             currentVisibleView?.visibility = View.GONE

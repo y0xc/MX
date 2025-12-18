@@ -93,7 +93,7 @@
     <string name="success_topmost_changed">最高层级绘制已%s，需重启悬浮窗生效</string>
     <string name="topmost_enabled">启用</string>
     <string name="topmost_disabled">关闭</string>
-    <string name="success_search_complete">搜索完成，找到 %1$d 个结果，耗时 %2$s</string>
+    <string name="success_search_complete">找到 %1$d 个结果，耗时 %2$s</string>
     <string name="search_cancelled">搜索已取消</string>
     <string name="error_search_failed_unknown" translatable="false">搜索结果获取失败</string>
 

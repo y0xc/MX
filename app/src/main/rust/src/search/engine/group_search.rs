@@ -1,5 +1,5 @@
 use std::sync::Arc;
-use std::sync::atomic::{AtomicI64, AtomicUsize};
+use std::sync::atomic::{AtomicBool, AtomicI64, AtomicUsize};
 use super::super::types::{SearchMode, SearchQuery, SearchValue, ValueType};
 use super::manager::{BPLUS_TREE_ORDER, PAGE_MASK, PAGE_SIZE, ValuePair};
 use crate::core::DRIVER_MANAGER;
@@ -1220,7 +1220,7 @@ fn dfs_ordered_with_cancel<F>(
     used: &mut std::collections::HashSet<u64>,
     results: &mut BPlusTreeSet<ValuePair>,
     check_cancelled: &F,
-    cancelled: &std::sync::atomic::AtomicBool,
+    cancelled: &AtomicBool,
 ) where
     F: Fn() -> bool,
 {
@@ -1415,7 +1415,7 @@ fn dfs_unordered_with_cancel<F>(
     used: &mut std::collections::HashSet<u64>,
     results: &mut BPlusTreeSet<ValuePair>,
     check_cancelled: &F,
-    cancelled: &std::sync::atomic::AtomicBool,
+    cancelled: &AtomicBool,
 ) where
     F: Fn() -> bool,
 {
@@ -1818,125 +1818,192 @@ where
 
     let total_anchors = anchors.len();
 
-    // Main loop: DFS for each anchor.
-    for (anchor_idx, anchor_addr) in anchors.iter().enumerate() {
-        // Check cancellation periodically.
-        if anchor_idx % 100 == 0 && check_cancelled() {
-            return Ok(refined_results);
+    // Use AtomicBool to propagate cancellation across parallel tasks.
+    let cancelled = AtomicBool::new(false);
+
+    // Inner DFS function with cancellation support.
+    fn dfs_with_cancel<FC>(
+        cand_idx: usize,
+        candidates: &[(u64, &Vec<u8>)],
+        query: &SearchQuery,
+        chosen: &mut Vec<(u64, ValueType)>,
+        used: &mut HashSet<u64>,
+        local_results: &mut Vec<(u64, ValueType)>,
+        check_cancelled: &FC,
+        cancelled: &AtomicBool,
+        iteration_count: &mut u64,
+    ) where
+        FC: Fn() -> bool,
+    {
+        // Check cancellation flag.
+        if cancelled.load(Ordering::Relaxed) {
+            return;
         }
 
-        let (min_addr, max_addr) = match query.mode {
-            SearchMode::Unordered => (
-                anchor_addr.saturating_sub(query.range as u64),
-                anchor_addr + query.range as u64,
-            ),
-            SearchMode::Ordered => (*anchor_addr, anchor_addr + query.range as u64),
-        };
+        let need_total = query.values.len();
+        let have = chosen.len();
 
-        // Candidates (excluding anchor itself to avoid duplicate usage).
-        let mut candidates: Vec<(u64, &Vec<u8>)> = Vec::new();
-        for (addr, bytes) in &addr_values {
-            if *addr >= min_addr && *addr <= max_addr && *addr != *anchor_addr {
-                candidates.push((*addr, bytes));
+        if have == need_total {
+            for (addr, vt) in chosen.iter() {
+                local_results.push((*addr, *vt));
             }
+            return;
         }
 
-        // Pruning: if candidate count < (query.values.len() - 1), cannot succeed.
-        if candidates.len() < query.values.len() - 1 {
+        let remaining_need = need_total - have;
+        let remaining_candidates = candidates.len().saturating_sub(cand_idx);
+        if remaining_candidates < remaining_need {
+            return;
+        }
+
+        let sv = &query.values[have];
+
+        for i in cand_idx..candidates.len() {
+            // Check cancellation periodically.
+            *iteration_count += 1;
+            if *iteration_count % 500 == 0 {
+                if check_cancelled() || cancelled.load(Ordering::Relaxed) {
+                    cancelled.store(true, Ordering::Relaxed);
+                    return;
+                }
+            }
+
+            let (addr, bytes) = candidates[i];
+
+            if sv.value_type().size() > bytes.len() {
+                continue;
+            }
+
+            if !sv.matched(bytes).unwrap_or(false) {
+                continue;
+            }
+
+            if used.contains(&addr) {
+                continue;
+            }
+
+            used.insert(addr);
+            chosen.push((addr, sv.value_type()));
+
+            dfs_with_cancel(
+                i + 1,
+                candidates,
+                query,
+                chosen,
+                used,
+                local_results,
+                check_cancelled,
+                cancelled,
+                iteration_count,
+            );
+
+            // Check if we should stop.
+            if cancelled.load(Ordering::Relaxed) {
+                return;
+            }
+
+            chosen.pop();
+            used.remove(&addr);
+        }
+    }
+
+    // Parallel processing of anchors using rayon.
+    let all_results: Vec<Vec<(u64, ValueType)>> = anchors
+        .par_iter()
+        .filter_map(|anchor_addr| {
+            // Check cancellation.
+            if check_cancelled() || cancelled.load(Ordering::Relaxed) {
+                cancelled.store(true, Ordering::Relaxed);
+                return None;
+            }
+
+            let (min_addr, max_addr) = match query.mode {
+                SearchMode::Unordered => (
+                    anchor_addr.saturating_sub(query.range as u64),
+                    anchor_addr + query.range as u64,
+                ),
+                SearchMode::Ordered => (*anchor_addr, anchor_addr + query.range as u64),
+            };
+
+            // Candidates (excluding anchor itself to avoid duplicate usage).
+            let mut candidates: Vec<(u64, &Vec<u8>)> = Vec::new();
+            for (addr, bytes) in &addr_values {
+                if *addr >= min_addr && *addr <= max_addr && *addr != *anchor_addr {
+                    candidates.push((*addr, bytes));
+                }
+            }
+
+            // Pruning: if candidate count < (query.values.len() - 1), cannot succeed.
+            if candidates.len() < query.values.len() - 1 {
+                if let Some(counter) = &processed_counter {
+                    counter.fetch_add(1, Ordering::Relaxed);
+                }
+                return None;
+            }
+
+            // DFS: find all valid combinations.
+            let mut used: HashSet<u64> = HashSet::new();
+            used.insert(*anchor_addr);
+
+            let mut chosen: Vec<(u64, ValueType)> = Vec::with_capacity(query.values.len());
+            chosen.push((*anchor_addr, query.values[0].value_type()));
+
+            let mut local_results: Vec<(u64, ValueType)> = Vec::new();
+            let mut iteration_count = 0u64;
+
+            dfs_with_cancel(
+                0,
+                &candidates,
+                query,
+                &mut chosen,
+                &mut used,
+                &mut local_results,
+                check_cancelled,
+                &cancelled,
+                &mut iteration_count,
+            );
+
+            // Update processed counter and progress.
             if let Some(counter) = &processed_counter {
-                counter.fetch_add(1, Ordering::Relaxed);
-            }
-            continue;
-        }
-
-        // DFS: find all valid combinations.
-        let mut used: HashSet<u64> = HashSet::new();
-        used.insert(*anchor_addr);
-
-        let mut chosen: Vec<(u64, ValueType)> = Vec::with_capacity(query.values.len());
-        chosen.push((*anchor_addr, query.values[0].value_type()));
-
-        // Inner DFS function.
-        fn dfs(
-            cand_idx: usize,
-            candidates: &[(u64, &Vec<u8>)],
-            query: &SearchQuery,
-            chosen: &mut Vec<(u64, ValueType)>,
-            used: &mut HashSet<u64>,
-            refined_results: &mut BPlusTreeSet<ValuePair>,
-        ) -> Result<()> {
-            let need_total = query.values.len();
-            let have = chosen.len();
-
-            if have == need_total {
-                for (addr, vt) in chosen.iter() {
-                    refined_results.insert(ValuePair::new(*addr, *vt));
+                let processed = counter.fetch_add(1, Ordering::Relaxed) + 1;
+                // Update progress every 100 anchors.
+                if processed % 100 == 0 {
+                    if let Some(found_counter) = &total_found_counter {
+                        found_counter.fetch_add(local_results.len(), Ordering::Relaxed);
+                    }
+                    let found = total_found_counter
+                        .map(|c| c.load(Ordering::Relaxed))
+                        .unwrap_or(0);
+                    update_progress(processed, found);
                 }
-                return Ok(());
             }
 
-            let remaining_need = need_total - have;
-            let remaining_candidates = candidates.len().saturating_sub(cand_idx);
-            if remaining_candidates < remaining_need {
-                return Ok(());
+            if local_results.is_empty() {
+                None
+            } else {
+                Some(local_results)
             }
+        })
+        .collect();
 
-            let sv = &query.values[have];
+    // Check if cancelled.
+    if cancelled.load(Ordering::Relaxed) {
+        return Ok(refined_results);
+    }
 
-            for i in cand_idx..candidates.len() {
-                let (addr, bytes) = candidates[i];
-
-                if sv.value_type().size() > bytes.len() {
-                    continue;
-                }
-
-                if !sv.matched(bytes).unwrap_or(false) {
-                    continue;
-                }
-
-                if used.contains(&addr) {
-                    continue;
-                }
-
-                used.insert(addr);
-                chosen.push((addr, sv.value_type()));
-
-                dfs(i + 1, candidates, query, chosen, used, refined_results)?;
-
-                chosen.pop();
-                used.remove(&addr);
-            }
-
-            Ok(())
-        }
-
-        dfs(0, &candidates, query, &mut chosen, &mut used, &mut refined_results)?;
-
-        // Update processed counter and progress.
-        if let Some(counter) = &processed_counter {
-            let processed = counter.fetch_add(1, Ordering::Relaxed) + 1;
-            if log_enabled!(Level::Debug) {
-                debug!("DFS done, processed addresses: {}", processed);
-            }
-            // Update progress every 10 anchors.
-            if processed % 10 == 0 {
-                let found = total_found_counter
-                    .map(|c| c.load(Ordering::Relaxed))
-                    .unwrap_or(refined_results.len());
-                update_progress(processed, found);
-            }
-        }
-
-        if let Some(counter) = &total_found_counter {
-            counter.store(refined_results.len(), Ordering::Relaxed);
+    // Merge all results into the final result set.
+    for local_results in all_results {
+        for (addr, vt) in local_results {
+            refined_results.insert(ValuePair::new(addr, vt));
         }
     }
 
     // Final progress update.
-    let found_count = total_found_counter
-        .map(|c| c.load(Ordering::Relaxed))
-        .unwrap_or(refined_results.len());
-    update_progress(total_anchors, found_count);
+    let final_count = refined_results.len();
+    if let Some(counter) = &total_found_counter {
+        counter.store(final_count, Ordering::Relaxed);
+    }
+    update_progress(total_anchors, final_count);
 
     Ok(refined_results)
 }

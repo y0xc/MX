@@ -266,14 +266,141 @@ impl ExactSearchResultManager {
     }
 
     pub fn remove_results_batch(&mut self, mut indices: Vec<usize>) -> anyhow::Result<()> {
-        // 从大到小排序，这样删除时不会影响后续的索引
-        indices.sort_unstable_by(|a, b| b.cmp(a));
-
-        for &index in &indices {
-            self.remove_result(index)?;
+        if indices.is_empty() {
+            return Ok(());
         }
 
-        debug!("Removed {} results in batch, total count: {}", indices.len(), self.total_count);
+        // 去重并从小到大排序
+        indices.sort_unstable();
+        indices.dedup();
+
+        // 过滤掉无效索引
+        indices.retain(|&idx| idx < self.total_count);
+        if indices.is_empty() {
+            return Ok(());
+        }
+
+        let delete_count = indices.len();
+        let memory_len = self.memory_buffer.len();
+
+        // 分离内存索引和磁盘索引
+        let (memory_indices, disk_indices): (Vec<usize>, Vec<usize>) = indices
+            .into_iter()
+            .partition(|&idx| idx < memory_len);
+
+        // 处理内存部分：一次性移动
+        if !memory_indices.is_empty() {
+            self.remove_memory_batch(&memory_indices);
+        }
+
+        // 处理磁盘部分：一次性移动
+        if !disk_indices.is_empty() {
+            // 将全局索引转换为磁盘索引（减去原始内存长度）
+            let adjusted_disk_indices: Vec<usize> = disk_indices
+                .iter()
+                .map(|&idx| idx - memory_len)
+                .collect();
+            self.remove_disk_batch(&adjusted_disk_indices)?;
+        }
+
+        self.total_count -= delete_count;
+        debug!(
+            "Batch removed {} results (memory: {}, disk: {}), total: {}",
+            delete_count,
+            memory_indices.len(),
+            disk_indices.len(),
+            self.total_count
+        );
+        Ok(())
+    }
+
+    /// 批量删除内存中的项（双指针方案）
+    /// sorted_indices 必须是已排序的有效索引
+    fn remove_memory_batch(&mut self, sorted_indices: &[usize]) {
+        if sorted_indices.is_empty() || self.memory_buffer.is_empty() {
+            return;
+        }
+
+        let first_del = sorted_indices[0];
+        let mem_len = self.memory_buffer.len();
+
+        // 边界检查：第一个删除索引必须在有效范围内
+        if first_del >= mem_len {
+            return;
+        }
+
+        // 使用双指针，一次遍历完成所有移动
+        let mut write_pos = first_del;
+        let mut delete_iter = sorted_indices.iter().peekable();
+
+        for read_pos in first_del..mem_len {
+            // 跳过要删除的位置
+            if let Some(&&del_idx) = delete_iter.peek() {
+                if read_pos == del_idx {
+                    delete_iter.next();
+                    continue;
+                }
+            }
+
+            // 移动保留的项
+            if write_pos != read_pos {
+                self.memory_buffer[write_pos] = self.memory_buffer[read_pos];
+            }
+            write_pos += 1;
+        }
+
+        // 截断到新长度
+        self.memory_buffer.truncate(write_pos);
+    }
+
+    /// 批量删除磁盘中的项（双指针方案）
+    /// sorted_disk_indices 必须是已排序的有效磁盘索引
+    fn remove_disk_batch(&mut self, sorted_disk_indices: &[usize]) -> anyhow::Result<()> {
+        if sorted_disk_indices.is_empty() || self.disk_count == 0 {
+            return Ok(());
+        }
+
+        let Some(ref mut mmap) = self.mmap else {
+            return Ok(());
+        };
+
+        let first_del = sorted_disk_indices[0];
+
+        // 边界检查：第一个删除索引必须在有效范围内
+        if first_del >= self.disk_count {
+            return Ok(());
+        }
+
+        let item_size = size_of::<ExactSearchResultItem>();
+        let mut write_pos = first_del;
+        let mut delete_iter = sorted_disk_indices.iter().peekable();
+
+        // 计算保留区间并移动
+        for read_pos in first_del..self.disk_count {
+            // 跳过要删除的位置
+            if let Some(&&del_idx) = delete_iter.peek() {
+                // 如果删除索引越界，跳过后续检查
+                if del_idx >= self.disk_count {
+                    // 清空迭代器，后续不再检查
+                    while delete_iter.next().is_some() {}
+                } else if read_pos == del_idx {
+                    delete_iter.next();
+                    continue;
+                }
+            }
+
+            // 移动保留的项
+            if write_pos != read_pos {
+                unsafe {
+                    let src = mmap.as_ptr().add(read_pos * item_size);
+                    let dst = mmap.as_mut_ptr().add(write_pos * item_size);
+                    std::ptr::copy_nonoverlapping(src, dst, item_size);
+                }
+            }
+            write_pos += 1;
+        }
+
+        self.disk_count = write_pos;
         Ok(())
     }
 

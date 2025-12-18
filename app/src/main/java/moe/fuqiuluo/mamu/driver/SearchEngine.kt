@@ -301,6 +301,15 @@ object SearchEngine {
     }
 
     /**
+     * Keeps only the specified search results, removes all others.
+     * @param indices Search result index array to keep.
+     * @return Whether operation was successful.
+     */
+    fun keepOnlyResults(indices: IntArray): Boolean {
+        return nativeKeepOnlyResults(indices)
+    }
+
+    /**
      * Sets filter conditions (address range, value range, data type, permissions).
      * Only affects search result filtering, does not affect actual search process.
      */
@@ -412,6 +421,7 @@ object SearchEngine {
     private external fun nativeClearSearchResults()
     private external fun nativeRemoveResult(index: Int): Boolean
     private external fun nativeRemoveResults(indices: IntArray): Boolean
+    private external fun nativeKeepOnlyResults(indices: IntArray): Boolean
     private external fun nativeSetFilter(
         enableAddressFilter: Boolean,
         addressStart: Long,

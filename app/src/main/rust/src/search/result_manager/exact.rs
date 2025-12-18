@@ -277,6 +277,99 @@ impl ExactSearchResultManager {
         Ok(())
     }
 
+    /// Keep only the specified results, remove all others
+    /// Optimized: when keep_count < remove_count, rebuild instead of batch delete
+    pub fn keep_only_results(&mut self, mut keep_indices: Vec<usize>) -> anyhow::Result<()> {
+        if keep_indices.is_empty() {
+            // 如果要保留的列表为空，直接清空所有结果
+            self.memory_buffer.clear();
+            self.disk_count = 0;
+            self.total_count = 0;
+            debug!("Kept 0 results, cleared all");
+            return Ok(());
+        }
+
+        let keep_count = keep_indices.len();
+        let remove_count = self.total_count.saturating_sub(keep_count);
+
+        if remove_count == 0 {
+            // 如果没有要删除的，说明所有索引都要保留
+            debug!("Keep all {} results, nothing to remove", self.total_count);
+            return Ok(());
+        }
+
+        // 优化策略：当保留数量 <= 删除数量时，采用重建策略
+        // 重建策略：读取要保留的项，清空结果集，重新添加
+        // 时间复杂度：O(keep_count) vs O(remove_count * move_cost)
+        if keep_count <= remove_count {
+            debug!(
+                "Using rebuild strategy: keep {} items, would remove {} items",
+                keep_count, remove_count
+            );
+
+            // 按索引排序，确保读取顺序
+            keep_indices.sort_unstable();
+
+            // 读取要保留的项
+            let mut kept_items: Vec<ExactSearchResultItem> = Vec::with_capacity(keep_count);
+            for &idx in &keep_indices {
+                if idx >= self.total_count {
+                    continue; // 跳过无效索引
+                }
+                if idx < self.memory_buffer.len() {
+                    kept_items.push(self.memory_buffer[idx]);
+                } else {
+                    let disk_index = idx - self.memory_buffer.len();
+                    if let Some(ref mmap) = self.mmap {
+                        let offset = disk_index * size_of::<ExactSearchResultItem>();
+                        unsafe {
+                            let ptr = mmap.as_ptr().add(offset) as *const ExactSearchResultItem;
+                            kept_items.push(*ptr);
+                        }
+                    }
+                }
+            }
+
+            // 清空当前结果集
+            self.memory_buffer.clear();
+            self.disk_count = 0;
+            self.total_count = 0;
+
+            // 重新添加保留的项（全部放入内存，因为数量较少）
+            for item in kept_items {
+                self.add_result(item)?;
+            }
+
+            debug!(
+                "Rebuild complete: kept {} results, removed {} results",
+                self.total_count, remove_count
+            );
+        } else {
+            // 当删除数量较少时，使用原来的批量删除策略
+            debug!(
+                "Using batch delete strategy: keep {} items, remove {} items",
+                keep_count, remove_count
+            );
+
+            use std::collections::HashSet;
+            let keep_set: HashSet<usize> = keep_indices.into_iter().collect();
+
+            // 计算要删除的索引
+            let remove_indices: Vec<usize> = (0..self.total_count)
+                .filter(|i| !keep_set.contains(i))
+                .collect();
+
+            self.remove_results_batch(remove_indices)?;
+
+            debug!(
+                "Batch delete complete: kept {} results, removed {} results",
+                self.total_count, remove_count
+            );
+        }
+
+        Ok(())
+    }
+
     /// Get all results (used for refine search)
     pub fn get_all_results(&self) -> anyhow::Result<Vec<ExactSearchResultItem>> {
         self.get_results(0, self.total_count)

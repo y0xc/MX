@@ -727,6 +727,15 @@ impl SearchEngineManager {
         result_mgr.remove_results_batch(indices)
     }
 
+    pub fn keep_only_results(&mut self, keep_indices: Vec<usize>) -> Result<()> {
+        let result_mgr = self
+            .result_manager
+            .as_mut()
+            .ok_or_else(|| anyhow!("SearchEngineManager not initialized"))?;
+
+        result_mgr.keep_only_results(keep_indices)
+    }
+
     pub fn set_filter(
         &mut self,
         enable_address_filter: bool,

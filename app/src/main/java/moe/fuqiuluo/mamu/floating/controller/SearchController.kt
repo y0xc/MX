@@ -143,6 +143,7 @@ class SearchController(
                 icon = R.drawable.search_check_24px,
                 label = "选定为搜索结果"
             ) {
+                setSelectedAsSearchResults()
             },
             ToolbarAction(
                 id = 13,
@@ -613,6 +614,52 @@ class SearchController(
                 updateSearchResultCount(searchResultAdapter.itemCount, totalCount)
             } else {
                 notification.showError("批量删除失败")
+            }
+        }
+    }
+
+    private fun setSelectedAsSearchResults() {
+        val totalCount = SearchEngine.getTotalResultCount().toInt()
+        if (totalCount == 0) {
+            notification.showWarning("没有可操作的结果")
+            return
+        }
+
+        val selectedItems = searchResultAdapter.getSelectedItems()
+        if (selectedItems.isEmpty()) {
+            notification.showWarning("未选择任何项目")
+            return
+        }
+
+        coroutineScope.launch {
+            // 获取选中项的 native positions
+            val selectedPositions = searchResultAdapter.getNativePositions()
+
+            // 直接调用 keepOnlyResults，保留选中的项，删除其他所有项
+            val indices = selectedPositions.map { it.toInt() }.toIntArray()
+            val success = withContext(Dispatchers.IO) {
+                SearchEngine.keepOnlyResults(indices)
+            }
+
+            if (success) {
+                notification.showSuccess("已将 ${selectedItems.size} 个选中项设为搜索结果")
+
+                // 重新加载搜索结果
+                val newTotalCount = SearchEngine.getTotalResultCount().toInt()
+                if (newTotalCount > 0) {
+                    val limit = newTotalCount.coerceAtMost(MMKV.defaultMMKV().searchPageSize)
+                    loadSearchResults(limit = limit)
+                    updateSearchResultCount(limit, newTotalCount)
+                } else {
+                    searchResultAdapter.clearResults()
+                    showEmptyState(true)
+                    updateSearchResultCount(0, null)
+                }
+
+                // 清空选择状态（因为索引位置已经变化）
+                searchResultAdapter.deselectAll()
+            } else {
+                notification.showError("操作失败")
             }
         }
     }

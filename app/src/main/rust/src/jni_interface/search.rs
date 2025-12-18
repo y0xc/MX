@@ -525,6 +525,26 @@ pub fn jni_remove_results(mut env: JNIEnv, _class: JObject, indices_array: JIntA
     .or_throw(&mut env)
 }
 
+#[jni_method(70, "moe/fuqiuluo/mamu/driver/SearchEngine", "nativeKeepOnlyResults", "([I)Z")]
+pub fn jni_keep_only_results(mut env: JNIEnv, _class: JObject, indices_array: JIntArray) -> jboolean {
+    (|| -> JniResult<jboolean> {
+        let len = env.get_array_length(&indices_array)? as usize;
+        let mut indices_buf = vec![0i32; len];
+        env.get_int_array_region(&indices_array, 0, &mut indices_buf)?;
+
+        let indices: Vec<usize> = indices_buf.into_iter().map(|i| i as usize).collect();
+
+        let mut manager = SEARCH_ENGINE_MANAGER
+            .write()
+            .map_err(|_| anyhow!("Failed to acquire SearchEngineManager write lock"))?;
+
+        manager.keep_only_results(indices)?;
+
+        Ok(JNI_TRUE)
+    })()
+    .or_throw(&mut env)
+}
+
 #[jni_method(70, "moe/fuqiuluo/mamu/driver/SearchEngine", "nativeSetFilter", "(ZJJZ[I)V")]
 pub fn jni_set_filter(
     mut env: JNIEnv,

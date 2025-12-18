@@ -132,6 +132,13 @@ impl SearchResultManager {
         }
     }
 
+    pub fn keep_only_results(&mut self, keep_indices: Vec<usize>) -> Result<()> {
+        match self.current_mode {
+            SearchResultMode::Exact => self.exact.keep_only_results(keep_indices),
+            SearchResultMode::Fuzzy => Err(anyhow!("FuzzySearchResultManager not implemented yet")),
+        }
+    }
+
     pub fn get_mode(&self) -> SearchResultMode {
         self.current_mode
     }

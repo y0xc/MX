@@ -19,12 +19,70 @@ class SavedAddressAdapter(
 ) : RecyclerView.Adapter<SavedAddressAdapter.ViewHolder>() {
 
     private val addresses = mutableListOf<SavedAddress>()
-    private val selectedPositions = mutableSetOf<Int>()
+
+    // 使用标志位 + 例外集合，避免全选/反选时 O(n) 的集合操作
+    // isAllSelected=true 时: 所有位置默认选中，deselectedPositions 存储取消选择的位置
+    // isAllSelected=false 时: 所有位置默认不选中，selectedPositions 存储选中的位置
+    private var isAllSelected = false
+    private val selectedPositions = mutableSetOf<Int>()    // isAllSelected=false 时使用
+    private val deselectedPositions = mutableSetOf<Int>()  // isAllSelected=true 时使用
+
+    init {
+        // 启用稳定ID，提升RecyclerView刷新性能
+        setHasStableIds(true)
+    }
+
+    /**
+     * 检查某个位置是否被选中 - O(1) 操作
+     */
+    private fun isPositionSelected(position: Int): Boolean {
+        return if (isAllSelected) {
+            position !in deselectedPositions
+        } else {
+            position in selectedPositions
+        }
+    }
+
+    /**
+     * 获取当前选中数量 - O(1) 操作
+     */
+    private fun getSelectedCount(): Int {
+        return if (isAllSelected) {
+            addresses.size - deselectedPositions.size
+        } else {
+            selectedPositions.size
+        }
+    }
+
+    /**
+     * 切换某个位置的选中状态
+     */
+    private fun toggleSelection(position: Int, selected: Boolean) {
+        if (isAllSelected) {
+            // 全选模式下，操作 deselectedPositions
+            if (selected) {
+                deselectedPositions.remove(position)
+            } else {
+                deselectedPositions.add(position)
+            }
+        } else {
+            // 非全选模式下，操作 selectedPositions
+            if (selected) {
+                selectedPositions.add(position)
+            } else {
+                selectedPositions.remove(position)
+            }
+        }
+    }
 
     fun setAddresses(newAddresses: List<SavedAddress>) {
         val oldSize = addresses.size
         addresses.clear()
+        // 重置选择状态
+        isAllSelected = false
         selectedPositions.clear()
+        deselectedPositions.clear()
+
         if (oldSize > 0) {
             notifyItemRangeRemoved(0, oldSize)
         }
@@ -50,28 +108,72 @@ class SavedAddressAdapter(
     }
 
     fun getSelectedItems(): List<SavedAddress> {
-        return selectedPositions.map { addresses[it] }
+        return if (isAllSelected) {
+            addresses.indices
+                .filter { it !in deselectedPositions }
+                .map { addresses[it] }
+        } else {
+            selectedPositions.map { addresses[it] }
+        }
     }
 
+    /**
+     * 全选 - O(1) 操作，只设置标志位
+     */
     fun selectAll() {
+        if (isAllSelected && deselectedPositions.isEmpty()) {
+            // 已经全选，无需操作
+            return
+        }
+
+        // O(1) 操作：只设置标志位并清空例外集合
+        isAllSelected = true
         selectedPositions.clear()
-        selectedPositions.addAll(addresses.indices)
-        notifyDataSetChanged()
-        onSelectionChanged(selectedPositions.size)
+        deselectedPositions.clear()
+
+        // 通知可见项更新（RecyclerView只会更新可见的ViewHolder）
+        notifyItemRangeChanged(0, addresses.size, PAYLOAD_SELECTION_CHANGED)
+        onSelectionChanged(addresses.size)
     }
 
+    /**
+     * 全不选 - O(1) 操作，只设置标志位
+     */
     fun deselectAll() {
+        if (!isAllSelected && selectedPositions.isEmpty()) {
+            // 已经是全不选状态，直接返回
+            return
+        }
+
+        // O(1) 操作：只设置标志位并清空例外集合
+        isAllSelected = false
         selectedPositions.clear()
-        notifyDataSetChanged()
+        deselectedPositions.clear()
+
+        notifyItemRangeChanged(0, addresses.size, PAYLOAD_SELECTION_CHANGED)
         onSelectionChanged(0)
     }
 
+    /**
+     * 反选 - O(1) 操作，只切换标志位并交换集合
+     */
     fun invertSelection() {
-        val newSelection = addresses.indices.toSet() - selectedPositions
+        // O(1) 操作：切换全选标志位，交换两个集合的角色
+        isAllSelected = !isAllSelected
+
+        // 交换 selectedPositions 和 deselectedPositions
+        val temp = selectedPositions.toMutableSet()
         selectedPositions.clear()
-        selectedPositions.addAll(newSelection)
-        notifyDataSetChanged()
-        onSelectionChanged(selectedPositions.size)
+        selectedPositions.addAll(deselectedPositions)
+        deselectedPositions.clear()
+        deselectedPositions.addAll(temp)
+
+        notifyItemRangeChanged(0, addresses.size, PAYLOAD_SELECTION_CHANGED)
+        onSelectionChanged(getSelectedCount())
+    }
+
+    companion object {
+        private const val PAYLOAD_SELECTION_CHANGED = "selection_changed"
     }
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
@@ -84,33 +186,47 @@ class SavedAddressAdapter(
     }
 
     override fun onBindViewHolder(holder: ViewHolder, position: Int) {
-        holder.bind(addresses[position])
+        holder.bind(addresses[position], position)
+    }
+
+    override fun onBindViewHolder(holder: ViewHolder, position: Int, payloads: MutableList<Any>) {
+        if (payloads.isEmpty()) {
+            super.onBindViewHolder(holder, position, payloads)
+        } else {
+            for (payload in payloads) {
+                if (payload == PAYLOAD_SELECTION_CHANGED) {
+                    holder.updateSelection(position)
+                }
+            }
+        }
     }
 
     override fun getItemCount(): Int = addresses.size
+
+    override fun getItemId(position: Int): Long {
+        // 使用地址作为稳定ID，帮助RecyclerView优化刷新性能
+        return addresses[position].address
+    }
 
     inner class ViewHolder(
         private val binding: ItemSavedAddressBinding
     ) : RecyclerView.ViewHolder(binding.root) {
 
         @SuppressLint("SetTextI18n")
-        fun bind(address: SavedAddress) {
+        fun bind(address: SavedAddress, position: Int) {
             val context = binding.root.context
-            val position = bindingAdapterPosition
 
-            // 设置 checkbox 状态
+            // 设置 checkbox 状态 - 使用 isPositionSelected() 支持全选标志位
+            val isSelected = isPositionSelected(position)
             binding.checkbox.setOnCheckedChangeListener(null)
-            val isSelected = selectedPositions.contains(position)
             binding.checkbox.isChecked = isSelected
             updateItemBackground(isSelected)
             binding.checkbox.setOnCheckedChangeListener { _, isChecked ->
-                if (isChecked) {
-                    selectedPositions.add(position)
-                } else {
-                    selectedPositions.remove(position)
+                bindingAdapterPosition.takeIf { it != RecyclerView.NO_POSITION }?.let { pos ->
+                    toggleSelection(pos, isChecked)
+                    updateItemBackground(isChecked)
+                    onSelectionChanged(getSelectedCount())
                 }
-                updateItemBackground(isChecked)
-                onSelectionChanged(selectedPositions.size)
             }
 
             // 设置变量名称
@@ -167,6 +283,22 @@ class SavedAddressAdapter(
             // 设置点击事件
             binding.itemContainer.setOnClickListener {
                 onItemClick(address, position)
+            }
+        }
+
+        fun updateSelection(position: Int) {
+            val isSelected = isPositionSelected(position)
+            binding.checkbox.apply {
+                setOnCheckedChangeListener(null)
+                isChecked = isSelected
+                updateItemBackground(isSelected)
+                setOnCheckedChangeListener { _, isChecked ->
+                    bindingAdapterPosition.takeIf { it != RecyclerView.NO_POSITION }?.let { pos ->
+                        toggleSelection(pos, isChecked)
+                        updateItemBackground(isChecked)
+                        onSelectionChanged(getSelectedCount())
+                    }
+                }
             }
         }
 

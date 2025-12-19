@@ -270,12 +270,13 @@ class FloatingWindowService : Service(), ProcessDeathMonitor.Callback {
     }
 
     private fun setupTopBar() {
+        // 顶部工具栏（竖屏）
         fullscreenBinding.attachedAppIcon.setOnClickListener {
             settingsController.showProcessSelectionDialog()
         }
 
         fullscreenBinding.btnCloseFullscreen.setOnClickListener {
-            hideFullscreen() // fullscreenBinding.btnCloseFullscreen
+            hideFullscreen()
         }
 
         fullscreenBinding.tabSettings.setOnClickListener {
@@ -297,6 +298,35 @@ class FloatingWindowService : Service(), ProcessDeathMonitor.Callback {
         fullscreenBinding.tabBreakpoints.setOnClickListener {
             changeCurrentContent(R.id.content_breakpoints, R.id.indicator_breakpoints)
         }
+
+        // 侧边栏（横屏）
+        fullscreenBinding.sidebarAppIcon.setOnClickListener {
+            settingsController.showProcessSelectionDialog()
+        }
+
+        fullscreenBinding.sidebarBtnClose.setOnClickListener {
+            hideFullscreen()
+        }
+
+        fullscreenBinding.sidebarTabSettings.setOnClickListener {
+            changeCurrentContent(R.id.content_settings, R.id.indicator_settings)
+        }
+
+        fullscreenBinding.sidebarTabSearch.setOnClickListener {
+            changeCurrentContent(R.id.content_search, R.id.indicator_search)
+        }
+
+        fullscreenBinding.sidebarTabSavedAddresses.setOnClickListener {
+            changeCurrentContent(R.id.content_saved_addresses, R.id.indicator_saved_addresses)
+        }
+
+        fullscreenBinding.sidebarTabMemoryPreview.setOnClickListener {
+            changeCurrentContent(R.id.content_memory_preview, R.id.indicator_memory_preview)
+        }
+
+        fullscreenBinding.sidebarTabBreakpoints.setOnClickListener {
+            changeCurrentContent(R.id.content_breakpoints, R.id.indicator_breakpoints)
+        }
     }
 
     private fun initializeControllers() {
@@ -307,8 +337,11 @@ class FloatingWindowService : Service(), ProcessDeathMonitor.Callback {
             notification = notification
         )
 
-        // 设置 badge view
-        savedAddressController.setAddressCountBadgeView(fullscreenBinding.badgeSavedAddresses)
+        // 设置 badge views (顶部工具栏和侧边栏)
+        savedAddressController.setAddressCountBadgeView(
+            fullscreenBinding.badgeSavedAddresses,
+            fullscreenBinding.sidebarBadgeSavedAddresses
+        )
 
         searchController = SearchController(
             context = this,
@@ -450,8 +483,74 @@ class FloatingWindowService : Service(), ProcessDeathMonitor.Callback {
     }
 
     private fun adjustLayoutForOrientation(orientation: Int) {
+        val isLandscape = orientation == Configuration.ORIENTATION_LANDSCAPE
+
+        // 切换顶部工具栏和侧边栏的可见性
+        fullscreenBinding.toolbarContainer.visibility = if (isLandscape) View.GONE else View.VISIBLE
+        fullscreenBinding.sidebarContainer.visibility = if (isLandscape) View.VISIBLE else View.GONE
+
+        // 更新内容区域的约束
+        val contentContainer = fullscreenBinding.contentContainer
+        val layoutParams = contentContainer.layoutParams as androidx.constraintlayout.widget.ConstraintLayout.LayoutParams
+
+        if (isLandscape) {
+            // 横屏：内容区域从侧边栏右侧开始
+            layoutParams.topToBottom = androidx.constraintlayout.widget.ConstraintLayout.LayoutParams.UNSET
+            layoutParams.topToTop = androidx.constraintlayout.widget.ConstraintLayout.LayoutParams.PARENT_ID
+            layoutParams.startToEnd = R.id.sidebar_container
+            layoutParams.startToStart = androidx.constraintlayout.widget.ConstraintLayout.LayoutParams.UNSET
+        } else {
+            // 竖屏：内容区域从顶部工具栏下方开始
+            layoutParams.topToBottom = R.id.toolbar_container
+            layoutParams.topToTop = androidx.constraintlayout.widget.ConstraintLayout.LayoutParams.UNSET
+            layoutParams.startToEnd = androidx.constraintlayout.widget.ConstraintLayout.LayoutParams.UNSET
+            layoutParams.startToStart = androidx.constraintlayout.widget.ConstraintLayout.LayoutParams.PARENT_ID
+        }
+
+        contentContainer.layoutParams = layoutParams
+
+        // 更新底部信息栏的约束
+        val bottomInfoBar = fullscreenBinding.bottomInfoBar
+        val bottomLayoutParams = bottomInfoBar.layoutParams as androidx.constraintlayout.widget.ConstraintLayout.LayoutParams
+
+        if (isLandscape) {
+            bottomLayoutParams.startToEnd = R.id.sidebar_container
+            bottomLayoutParams.startToStart = androidx.constraintlayout.widget.ConstraintLayout.LayoutParams.UNSET
+        } else {
+            bottomLayoutParams.startToEnd = androidx.constraintlayout.widget.ConstraintLayout.LayoutParams.UNSET
+            bottomLayoutParams.startToStart = androidx.constraintlayout.widget.ConstraintLayout.LayoutParams.PARENT_ID
+        }
+
+        bottomInfoBar.layoutParams = bottomLayoutParams
+
+        // 同步侧边栏的 indicator 状态
+        syncIndicatorState()
+
         if (::searchController.isInitialized) {
             searchController.adjustLayoutForOrientation(orientation)
+        }
+    }
+
+    private fun syncIndicatorState() {
+        // 同步顶部工具栏和侧边栏的 indicator 状态
+        val toolbarIndicators = listOf(
+            fullscreenBinding.indicatorSettings,
+            fullscreenBinding.indicatorSearch,
+            fullscreenBinding.indicatorSavedAddresses,
+            fullscreenBinding.indicatorMemoryPreview,
+            fullscreenBinding.indicatorBreakpoints
+        )
+
+        val sidebarIndicators = listOf(
+            fullscreenBinding.sidebarIndicatorSettings,
+            fullscreenBinding.sidebarIndicatorSearch,
+            fullscreenBinding.sidebarIndicatorSavedAddresses,
+            fullscreenBinding.sidebarIndicatorMemoryPreview,
+            fullscreenBinding.sidebarIndicatorBreakpoints
+        )
+
+        toolbarIndicators.forEachIndexed { index, toolbarIndicator ->
+            sidebarIndicators[index].visibility = toolbarIndicator.visibility
         }
     }
 
@@ -523,7 +622,8 @@ class FloatingWindowService : Service(), ProcessDeathMonitor.Callback {
         val enableAnimation = mmkv.tabSwitchAnimation
 
         fun updateTabIndicator(activeIndicatorId: Int) {
-            val indicators = mapOf(
+            // 顶部工具栏 indicators
+            val toolbarIndicators = mapOf(
                 R.id.indicator_settings to fullscreenBinding.indicatorSettings,
                 R.id.indicator_search to fullscreenBinding.indicatorSearch,
                 R.id.indicator_saved_addresses to fullscreenBinding.indicatorSavedAddresses,
@@ -531,8 +631,20 @@ class FloatingWindowService : Service(), ProcessDeathMonitor.Callback {
                 R.id.indicator_breakpoints to fullscreenBinding.indicatorBreakpoints
             )
 
+            // 侧边栏 indicators (映射到相同的 activeIndicatorId)
+            val sidebarIndicators = mapOf(
+                R.id.indicator_settings to fullscreenBinding.sidebarIndicatorSettings,
+                R.id.indicator_search to fullscreenBinding.sidebarIndicatorSearch,
+                R.id.indicator_saved_addresses to fullscreenBinding.sidebarIndicatorSavedAddresses,
+                R.id.indicator_memory_preview to fullscreenBinding.sidebarIndicatorMemoryPreview,
+                R.id.indicator_breakpoints to fullscreenBinding.sidebarIndicatorBreakpoints
+            )
+
+            // 合并所有 indicators
+            val allIndicators = toolbarIndicators + sidebarIndicators
+
             if (enableAnimation) {
-                indicators.forEach { (indicatorId, indicator) ->
+                allIndicators.forEach { (indicatorId, indicator) ->
                     if (indicatorId == activeIndicatorId) {
                         if (indicator.visibility != View.VISIBLE) {
                             // 复用预创建的动画对象
@@ -556,7 +668,7 @@ class FloatingWindowService : Service(), ProcessDeathMonitor.Callback {
                     }
                 }
             } else {
-                indicators.forEach { (indicatorId, indicator) ->
+                allIndicators.forEach { (indicatorId, indicator) ->
                     indicator.visibility = if (indicatorId == activeIndicatorId) View.VISIBLE else View.GONE
                 }
             }
@@ -619,10 +731,12 @@ class FloatingWindowService : Service(), ProcessDeathMonitor.Callback {
 
     private fun updateTopIcon(process: DisplayProcessInfo?) {
         val fullscreenIconView = fullscreenBinding.attachedAppIcon
+        val sidebarIconView = fullscreenBinding.sidebarAppIcon
         val floatingIconView = floatingIconBinding.appIcon
 
         if (process == null) {
             fullscreenIconView.setImageResource(R.mipmap.ic_launcher)
+            sidebarIconView.setImageResource(R.mipmap.ic_launcher)
             floatingIconView.setImageResource(R.mipmap.ic_launcher)
             return
         }
@@ -633,13 +747,16 @@ class FloatingWindowService : Service(), ProcessDeathMonitor.Callback {
             }
             if (appIcon != null) {
                 fullscreenIconView.setImageDrawable(appIcon)
+                sidebarIconView.setImageDrawable(appIcon)
                 floatingIconView.setImageDrawable(appIcon)
             } else {
                 fullscreenIconView.setImageResource(R.drawable.icon_android_24px)
+                sidebarIconView.setImageResource(R.drawable.icon_android_24px)
                 floatingIconView.setImageResource(R.drawable.icon_android_24px)
             }
         }.onFailure {
             fullscreenIconView.setImageResource(R.drawable.icon_android_24px)
+            sidebarIconView.setImageResource(R.drawable.icon_android_24px)
             floatingIconView.setImageResource(R.drawable.icon_android_24px)
         }
     }

@@ -38,8 +38,8 @@ class SavedAddressController(
     // 保存的地址列表（内存中）
     private val savedAddresses = mutableListOf<SavedAddress>()
 
-    // 地址数量
-    private var addressCountBadgeView: TextView? = null
+    // 地址数量 badge views (支持多个，用于顶部工具栏和侧边栏)
+    private val addressCountBadgeViews = mutableListOf<TextView>()
 
     // 列表适配器
     private val adapter: SavedAddressAdapter = SavedAddressAdapter(
@@ -70,14 +70,15 @@ class SavedAddressController(
         updateAddressCountBadge()
     }
 
-    fun setAddressCountBadgeView(badge: TextView) {
-        addressCountBadgeView = badge
+    fun setAddressCountBadgeView(vararg badges: TextView) {
+        addressCountBadgeViews.clear()
+        addressCountBadgeViews.addAll(badges)
         updateAddressCountBadge()
     }
 
     private fun updateAddressCountBadge() {
-        addressCountBadgeView?.let { badge ->
-            val count = savedAddresses.size
+        val count = savedAddresses.size
+        addressCountBadgeViews.forEach { badge ->
             if (count > 0) {
                 badge.text = if (count > 99) "99+" else count.toString()
                 badge.visibility = View.VISIBLE

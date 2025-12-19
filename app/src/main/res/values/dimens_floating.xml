@@ -11,7 +11,8 @@
     <dimen name="floating_spacing_xxl">32dp</dimen>     <!-- 极大间距 -->
 
     <!-- 组件高度 (Component Heights) -->
-    <dimen name="floating_height_toolbar">65dp</dimen>
+    <dimen name="floating_height_toolbar">56dp</dimen>
+    <dimen name="floating_sidebar_width">56dp</dimen>
     <dimen name="floating_height_tab">48dp</dimen>
     <dimen name="floating_height_button">48dp</dimen>
     <dimen name="floating_height_button_sm">40dp</dimen>

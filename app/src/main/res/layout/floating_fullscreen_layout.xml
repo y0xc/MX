@@ -7,6 +7,214 @@
     android:layout_height="match_parent"
     android:background="@color/floating_background_overlay">
 
+    <!-- 横屏侧边栏 (默认隐藏) -->
+    <androidx.constraintlayout.widget.ConstraintLayout
+        android:id="@+id/sidebar_container"
+        android:layout_width="@dimen/floating_sidebar_width"
+        android:layout_height="0dp"
+        android:background="@color/floating_toolbar"
+        android:elevation="@dimen/floating_elevation_toolbar"
+        android:visibility="gone"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        tools:visibility="visible">
+
+        <!-- 当前附加应用图标 -->
+        <com.google.android.material.imageview.ShapeableImageView
+            android:id="@+id/sidebar_app_icon"
+            android:layout_width="@dimen/floating_icon_xl"
+            android:layout_height="@dimen/floating_icon_xl"
+            android:layout_marginTop="@dimen/floating_spacing_md"
+            android:importantForAccessibility="no"
+            android:scaleType="centerCrop"
+            android:src="@mipmap/ic_launcher"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="parent"
+            app:shapeAppearanceOverlay="@style/ShapeAppearance.Material3.Corner.Medium" />
+
+        <!-- 侧边栏 Tab 列表 -->
+        <ScrollView
+            android:id="@+id/sidebar_scroll"
+            android:layout_width="0dp"
+            android:layout_height="0dp"
+            android:layout_marginTop="@dimen/floating_spacing_sm"
+            android:scrollbars="none"
+            app:layout_constraintBottom_toTopOf="@id/sidebar_btn_close"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@id/sidebar_app_icon">
+
+            <LinearLayout
+                android:id="@+id/sidebar_tabbar_layout"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_horizontal"
+                android:orientation="vertical">
+
+                <!-- 设置 Tab -->
+                <FrameLayout
+                    android:id="@+id/sidebar_tab_frame_settings"
+                    android:layout_width="@dimen/floating_touch_target"
+                    android:layout_height="@dimen/floating_touch_target">
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/sidebar_tab_settings"
+                        style="@style/FloatingButton.MaterialIcon.Tab"
+                        android:contentDescription="@string/tab_settings"
+                        app:icon="@drawable/icon_settings_24px" />
+
+                    <View
+                        android:id="@+id/sidebar_indicator_settings"
+                        android:layout_width="@dimen/floating_spacing_xs"
+                        android:layout_height="match_parent"
+                        android:layout_gravity="start"
+                        android:layout_marginTop="@dimen/floating_spacing_sm"
+                        android:layout_marginBottom="@dimen/floating_spacing_sm"
+                        android:background="@drawable/tab_indicator_background"
+                        android:visibility="gone" />
+
+                </FrameLayout>
+
+                <!-- 搜索 Tab -->
+                <FrameLayout
+                    android:id="@+id/sidebar_tab_frame_search"
+                    android:layout_width="@dimen/floating_touch_target"
+                    android:layout_height="@dimen/floating_touch_target">
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/sidebar_tab_search"
+                        style="@style/FloatingButton.MaterialIcon.Tab"
+                        android:contentDescription="@string/tab_search"
+                        app:icon="@drawable/icon_search_24px" />
+
+                    <View
+                        android:id="@+id/sidebar_indicator_search"
+                        android:layout_width="@dimen/floating_spacing_xs"
+                        android:layout_height="match_parent"
+                        android:layout_gravity="start"
+                        android:layout_marginTop="@dimen/floating_spacing_sm"
+                        android:layout_marginBottom="@dimen/floating_spacing_sm"
+                        android:background="@drawable/tab_indicator_background"
+                        android:visibility="gone" />
+
+                </FrameLayout>
+
+                <!-- 保存的地址 Tab -->
+                <FrameLayout
+                    android:id="@+id/sidebar_tab_frame_saved_addresses"
+                    android:layout_width="@dimen/floating_touch_target"
+                    android:layout_height="@dimen/floating_touch_target">
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/sidebar_tab_saved_addresses"
+                        style="@style/FloatingButton.MaterialIcon.Tab"
+                        android:contentDescription="@string/tab_saved_addresses"
+                        app:icon="@drawable/icon_save_24px" />
+
+                    <!-- Badge for saved address count -->
+                    <com.google.android.material.textview.MaterialTextView
+                        android:id="@+id/sidebar_badge_saved_addresses"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_gravity="top|end"
+                        android:layout_marginTop="4dp"
+                        android:layout_marginEnd="4dp"
+                        android:background="@drawable/badge_background"
+                        android:gravity="center"
+                        android:minWidth="16dp"
+                        android:minHeight="16dp"
+                        android:paddingStart="4dp"
+                        android:paddingTop="2dp"
+                        android:paddingEnd="4dp"
+                        android:paddingBottom="2dp"
+                        android:textColor="@android:color/white"
+                        android:textSize="10sp"
+                        android:textStyle="bold"
+                        android:visibility="gone"
+                        tools:ignore="SmallSp"
+                        tools:text="99"
+                        tools:visibility="visible" />
+
+                    <View
+                        android:id="@+id/sidebar_indicator_saved_addresses"
+                        android:layout_width="@dimen/floating_spacing_xs"
+                        android:layout_height="match_parent"
+                        android:layout_gravity="start"
+                        android:layout_marginTop="@dimen/floating_spacing_sm"
+                        android:layout_marginBottom="@dimen/floating_spacing_sm"
+                        android:background="@drawable/tab_indicator_background"
+                        android:visibility="gone" />
+
+                </FrameLayout>
+
+                <!-- 内存预览 Tab -->
+                <FrameLayout
+                    android:id="@+id/sidebar_tab_frame_memory_preview"
+                    android:layout_width="@dimen/floating_touch_target"
+                    android:layout_height="@dimen/floating_touch_target">
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/sidebar_tab_memory_preview"
+                        style="@style/FloatingButton.MaterialIcon.Tab"
+                        android:contentDescription="@string/tab_memory_preview"
+                        app:icon="@drawable/icon_list_24px" />
+
+                    <View
+                        android:id="@+id/sidebar_indicator_memory_preview"
+                        android:layout_width="@dimen/floating_spacing_xs"
+                        android:layout_height="match_parent"
+                        android:layout_gravity="start"
+                        android:layout_marginTop="@dimen/floating_spacing_sm"
+                        android:layout_marginBottom="@dimen/floating_spacing_sm"
+                        android:background="@drawable/tab_indicator_background"
+                        android:visibility="gone" />
+
+                </FrameLayout>
+
+                <!-- 断点 Tab -->
+                <FrameLayout
+                    android:id="@+id/sidebar_tab_frame_breakpoints"
+                    android:layout_width="@dimen/floating_touch_target"
+                    android:layout_height="@dimen/floating_touch_target">
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/sidebar_tab_breakpoints"
+                        style="@style/FloatingButton.MaterialIcon.Tab"
+                        android:contentDescription="@string/tab_breakpoints"
+                        app:icon="@drawable/icon_bug_report_24px" />
+
+                    <View
+                        android:id="@+id/sidebar_indicator_breakpoints"
+                        android:layout_width="@dimen/floating_spacing_xs"
+                        android:layout_height="match_parent"
+                        android:layout_gravity="start"
+                        android:layout_marginTop="@dimen/floating_spacing_sm"
+                        android:layout_marginBottom="@dimen/floating_spacing_sm"
+                        android:background="@drawable/tab_indicator_background"
+                        android:visibility="gone" />
+
+                </FrameLayout>
+
+            </LinearLayout>
+
+        </ScrollView>
+
+        <!-- 关闭按钮 -->
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/sidebar_btn_close"
+            style="@style/FloatingButton.MaterialIcon.Close"
+            android:layout_marginBottom="@dimen/floating_spacing_md"
+            android:contentDescription="@string/content_desc_close"
+            app:icon="@drawable/icon_close_24px"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent" />
+
+    </androidx.constraintlayout.widget.ConstraintLayout>
+
+    <!-- 竖屏顶部工具栏 -->
     <androidx.constraintlayout.widget.ConstraintLayout
         android:id="@+id/toolbar_container"
         android:layout_width="0dp"

@@ -474,7 +474,7 @@
         android:id="@+id/bottom_info_bar"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:minHeight="@dimen/floating_height_button"
+        android:minHeight="24dp"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent">
@@ -486,7 +486,7 @@
             android:ellipsize="end"
             android:gravity="center"
             android:maxLines="1"
-            android:paddingBottom="@dimen/floating_spacing_sm"
+            android:paddingBottom="4dp"
             android:text="Jh,Ch,Ca,Cb,Cd,Ps,A,Xs"
             android:textSize="12sp"
             android:textColor="@color/floating_text_primary"

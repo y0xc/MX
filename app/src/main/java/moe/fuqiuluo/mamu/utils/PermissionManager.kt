@@ -64,7 +64,8 @@ object PermissionConfig {
      * 这些权限不需要运行时授权，只需要在 manifest 中声明即可
      */
     val INSTALL_TIME_PERMISSIONS = listOf(
-        "android.permission.QUERY_ALL_PACKAGES"  // 查询所有应用包名
+        "android.permission.QUERY_ALL_PACKAGES",  // 查询所有应用包名
+        "android.permission.INTERNET"              // 网络访问
     )
 }
 

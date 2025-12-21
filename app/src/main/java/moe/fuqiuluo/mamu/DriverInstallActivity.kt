@@ -4,19 +4,15 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import moe.fuqiuluo.mamu.data.local.RootFileSystem
+import moe.fuqiuluo.mamu.ui.screen.DriverInstallScreen
 import moe.fuqiuluo.mamu.ui.theme.MXTheme
 
 /**
  * 驱动安装Activity
- * TODO: 实现驱动安装界面
  */
 class DriverInstallActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -25,20 +21,14 @@ class DriverInstallActivity : ComponentActivity() {
 
         setContent {
             MXTheme {
-                Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(innerPadding),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = "驱动安装功能开发中...",
-                            style = MaterialTheme.typography.titleMedium
-                        )
-                    }
-                }
+                DriverInstallScreen(
+                    onNavigateBack = { finish() }
+                )
             }
+        }
+
+        lifecycleScope.launch(Dispatchers.Main) {
+            RootFileSystem.connect(this@DriverInstallActivity)
         }
     }
 }

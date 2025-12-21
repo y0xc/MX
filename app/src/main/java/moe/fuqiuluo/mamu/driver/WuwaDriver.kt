@@ -2,6 +2,9 @@
 
 package moe.fuqiuluo.mamu.driver
 
+import moe.fuqiuluo.mamu.data.model.DriverInfo
+import moe.fuqiuluo.mamu.data.model.DriverInstallResult
+
 object WuwaDriver {
     init {
         System.loadLibrary("mamu_core")
@@ -68,6 +71,25 @@ object WuwaDriver {
      */
     fun batchWriteMemory(addrs: LongArray, dataArray: Array<ByteArray>): BooleanArray = nativeBatchWriteMemory(addrs, dataArray)
 
+    /**
+     * 获取可用的驱动列表
+     * @return 可用驱动信息数组
+     */
+    fun getAvailableDrivers(): Array<DriverInfo> = nativeGetAvailableDrivers()
+
+    /**
+     * 下载并安装驱动（Rust层通过JNI调用Java的RootFileSystem和Shell）
+     * @param driverName 驱动名称
+     * @return 安装结果
+     */
+    fun downloadAndInstallDriver(driverName: String): DriverInstallResult = nativeDownloadAndInstallDriver(driverName)
+
+    /**
+     * 检查驱动是否已安装
+     * @return 是否已安装
+     */
+    fun isDriverInstalled(): Boolean = nativeIsDriverInstalled()
+
     private external fun nativeIsLoaded(): Boolean
     private external fun nativeSetDriverFd(fd: Int): Boolean
     private external fun nativeSetMemoryAccessMode(mode: Int)
@@ -84,4 +106,7 @@ object WuwaDriver {
     private external fun nativeBatchReadMemory(addrs: LongArray, sizes: IntArray): Array<ByteArray?>
     private external fun nativeWriteMemory(addr: Long, data: ByteArray): Boolean
     private external fun nativeBatchWriteMemory(addrs: LongArray, dataArray: Array<ByteArray>): BooleanArray
+    private external fun nativeGetAvailableDrivers(): Array<DriverInfo>
+    private external fun nativeDownloadAndInstallDriver(driverName: String): DriverInstallResult
+    private external fun nativeIsDriverInstalled(): Boolean
 }

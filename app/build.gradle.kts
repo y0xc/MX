@@ -63,6 +63,9 @@ dependencies {
     // Material Icons Extended
     implementation(libs.androidx.compose.material.icons.extended)
 
+    // Window Size Class for adaptive layouts
+    implementation("androidx.compose.material3:material3-window-size-class")
+
     // MMKV for key-value storage
     implementation(libs.mmkv)
 

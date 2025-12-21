@@ -13,6 +13,8 @@ import kotlinx.coroutines.suspendCancellableCoroutine
 import moe.fuqiuluo.mamu.service.RootFileSystemService
 import kotlin.coroutines.resume
 
+private const val TAG = "RootFileSystem"
+
 object RootFileSystem {
     @Volatile
     private var fileSystemManager: FileSystemManager? = null
@@ -40,7 +42,7 @@ object RootFileSystem {
                 }
                 isConnecting = false
                 if (cont.isActive) {
-                    Log.d("RootFileSystem", "Connected to RootFileSystemService")
+                    Log.d(TAG, "Connected to RootFileSystemService")
                     cont.resume(fileSystemManager != null)
                 }
             }
@@ -48,6 +50,7 @@ object RootFileSystem {
             override fun onServiceDisconnected(name: ComponentName?) {
                 fileSystemManager = null
                 isConnecting = false
+                Log.e(TAG, "RootFileSystem disconnected")
             }
         }
 
@@ -131,8 +134,12 @@ object RootFileSystem {
      * @param createParentDirs 是否自动创建父目录
      * @return 是否成功
      */
+    @JvmStatic
     fun writeFile(path: String, content: ByteArray, createParentDirs: Boolean = true): Boolean {
-        val fs = fileSystemManager ?: return false
+        val fs = fileSystemManager ?: run {
+            Log.e(TAG, "RootFileSystem.writeFile fileSystemManager not init")
+            return false
+        }
         return try {
             val file = fs.getFile(path)
             if (createParentDirs) {
@@ -186,6 +193,7 @@ object RootFileSystem {
      * @param path 文件路径
      * @return 是否成功
      */
+    @JvmStatic
     fun delete(path: String): Boolean {
         val fs = fileSystemManager ?: return false
         return try {

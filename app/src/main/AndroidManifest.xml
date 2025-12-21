@@ -6,6 +6,9 @@
     <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES"
         tools:ignore="PackageVisibilityPolicy,QueryAllPackagesPermission" />
 
+    <!-- Internet permission for driver download -->
+    <uses-permission android:name="android.permission.INTERNET" />
+
     <!-- Floating window permission - 需要通过 AppOps 授予 -->
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
 

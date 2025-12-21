@@ -14,7 +14,7 @@ import moe.fuqiuluo.mamu.databinding.ItemMemoryPreviewNavigationBinding
 import moe.fuqiuluo.mamu.floating.data.model.MemoryPreviewItem
 
 class MemoryPreviewAdapter(
-    private val onRowClick: (Long) -> Unit = {},
+    private val onRowClick: (MemoryPreviewItem.MemoryRow) -> Unit = {},
     private val onNavigationClick: (Long, Boolean) -> Unit = { _, _ -> },
     private val onSelectionChanged: (Int) -> Unit = {}
 ) : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
@@ -188,7 +188,7 @@ class MemoryPreviewAdapter(
                 if (position != RecyclerView.NO_POSITION) {
                     val item = items[position] as? MemoryPreviewItem.MemoryRow
                     item?.let {
-                        onRowClick(it.address)
+                        onRowClick(it)
                     }
                 }
             }

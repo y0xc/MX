@@ -21,6 +21,7 @@ import moe.fuqiuluo.mamu.driver.SearchResultItem
 import moe.fuqiuluo.mamu.data.settings.getDialogOpacity
 import moe.fuqiuluo.mamu.data.settings.keyboardType
 import moe.fuqiuluo.mamu.floating.data.model.DisplayValueType
+import moe.fuqiuluo.mamu.floating.data.model.SavedAddress
 import moe.fuqiuluo.mamu.floating.event.FloatingEventBus
 import moe.fuqiuluo.mamu.floating.event.NavigateToMemoryAddressEvent
 import moe.fuqiuluo.mamu.floating.event.UIActionEvent
@@ -30,17 +31,88 @@ import moe.fuqiuluo.mamu.widget.simpleSingleChoiceDialog
 
 private const val TAG = "ModifyValueDialog"
 
-class ModifyValueDialog(
-    context: Context,
-    private val notification: NotificationOverlay,
-    private val clipboardManager: ClipboardManager,
-    private val searchResultItem: SearchResultItem,
-    private val onConfirm: ((address: Long, oldValue: String, newValue: String, valueType: DisplayValueType) -> Unit)? = null
-) : BaseDialog(context) {
-    lateinit var value: String
-    var address: Long = Long.MIN_VALUE
+class ModifyValueDialog : BaseDialog {
+    private lateinit var notification: NotificationOverlay
+    private lateinit var clipboardManager: ClipboardManager
+    private lateinit var modifyTarget: ModifyTarget
+    private var onConfirm: ((address: Long, oldValue: String, newValue: String, valueType: DisplayValueType) -> Unit)? = null
 
     private val coroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+
+    private data class ModifyTarget(
+        val address: Long,
+        val value: String,
+        val displayValueType: DisplayValueType
+    )
+
+    constructor(
+        context: Context,
+        notification: NotificationOverlay,
+        clipboardManager: ClipboardManager,
+        searchResultItem: SearchResultItem,
+        onConfirm: ((address: Long, oldValue: String, newValue: String, valueType: DisplayValueType) -> Unit)? = null
+    ) : super(context) {
+        this.notification = notification
+        this.clipboardManager = clipboardManager
+        this.onConfirm = onConfirm
+
+        this.modifyTarget = when (searchResultItem) {
+            is ExactSearchResultItem -> ModifyTarget(
+                address = searchResultItem.address,
+                value = searchResultItem.value,
+                displayValueType = searchResultItem.displayValueType ?: DisplayValueType.DWORD
+            )
+            is FuzzySearchResultItem -> ModifyTarget(
+                address = searchResultItem.address,
+                value = searchResultItem.value,
+                displayValueType = searchResultItem.displayValueType ?: DisplayValueType.DWORD
+            )
+            else -> {
+                Log.e(TAG, "Unsupported SearchResultItem type")
+                throw IllegalArgumentException("Unsupported SearchResultItem type")
+            }
+        }
+    }
+
+    constructor(
+        context: Context,
+        notification: NotificationOverlay,
+        clipboardManager: ClipboardManager,
+        savedAddress: SavedAddress,
+        onConfirm: ((address: Long, oldValue: String, newValue: String, valueType: DisplayValueType) -> Unit)? = null
+    ) : super(context) {
+        this.notification = notification
+        this.clipboardManager = clipboardManager
+        this.onConfirm = onConfirm
+
+        // 从 SavedAddress 提取数据
+        this.modifyTarget = ModifyTarget(
+            address = savedAddress.address,
+            value = savedAddress.value,
+            displayValueType = savedAddress.displayValueType ?: DisplayValueType.DWORD
+        )
+    }
+
+    constructor(
+        context: Context,
+        notification: NotificationOverlay,
+        clipboardManager: ClipboardManager,
+        address: Long,
+        currentValue: String = "",
+        defaultType: DisplayValueType = DisplayValueType.DWORD,
+        onConfirm: ((address: Long, oldValue: String, newValue: String, valueType: DisplayValueType) -> Unit)? = null
+    ) : super(context) {
+        this.notification = notification
+        this.clipboardManager = clipboardManager
+        this.onConfirm = onConfirm
+
+        // 创建 ModifyTarget
+        this.modifyTarget = ModifyTarget(
+            address = address,
+            value = currentValue,
+            displayValueType = defaultType
+        )
+    }
 
     @SuppressLint("ClickableViewAccessibility", "SetTextI18n")
     override fun setupDialog() {
@@ -76,23 +148,10 @@ class ModifyValueDialog(
             binding.divider.visibility = View.GONE
         }
 
-        val displayValueType: DisplayValueType
-        when (searchResultItem) {
-            is ExactSearchResultItem -> {
-                address = searchResultItem.address
-                displayValueType = searchResultItem.displayValueType ?: DisplayValueType.DWORD
-                value = searchResultItem.value
-            }
-            is FuzzySearchResultItem -> {
-                address = searchResultItem.address
-                displayValueType = searchResultItem.displayValueType ?: DisplayValueType.DWORD
-                value = searchResultItem.value
-            }
-            else -> {
-                Log.e(TAG, "Unsupported SearchResultItem type")
-                return
-            }
-        }
+        // 从 modifyTarget 提取数据
+        val address = modifyTarget.address
+        val displayValueType = modifyTarget.displayValueType
+        val value = modifyTarget.value
 
         // 设置标题：修改 [地址] 的值
         val addressHex = String.format("%X", address)

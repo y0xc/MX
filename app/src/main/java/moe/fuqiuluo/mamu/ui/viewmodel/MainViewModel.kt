@@ -6,7 +6,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import moe.fuqiuluo.mamu.data.model.DriverInfo
+import moe.fuqiuluo.mamu.data.model.DashboardDriverInfo
 import moe.fuqiuluo.mamu.data.model.SeLinuxStatus
 import moe.fuqiuluo.mamu.data.model.SystemInfo
 import moe.fuqiuluo.mamu.data.local.DriverDataRepository
@@ -16,7 +16,7 @@ import moe.fuqiuluo.mamu.floating.FloatingWindowStateManager
 data class MainUiState(
     val isLoading: Boolean = true,
     val systemInfo: SystemInfo = SystemInfo(),
-    val driverInfo: DriverInfo? = null,
+    val dashboardDriverInfo: DashboardDriverInfo? = null,
     val seLinuxStatus: SeLinuxStatus? = null,
     val hasRootAccess: Boolean = false,
     val isFloatingWindowActive: Boolean = false,
@@ -57,7 +57,7 @@ class MainViewModel(
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
                     systemInfo = systemInfo,
-                    driverInfo = driverInfo,
+                    dashboardDriverInfo = driverInfo,
                     seLinuxStatus = seLinuxStatus,
                     hasRootAccess = hasRoot
                 )

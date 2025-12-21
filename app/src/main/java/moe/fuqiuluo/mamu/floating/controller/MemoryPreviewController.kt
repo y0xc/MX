@@ -1,5 +1,6 @@
 package moe.fuqiuluo.mamu.floating.controller
 
+import android.content.ClipboardManager
 import android.content.Context
 import android.graphics.Color
 import android.text.SpannableStringBuilder
@@ -21,9 +22,13 @@ import moe.fuqiuluo.mamu.driver.Disassembler
 import moe.fuqiuluo.mamu.driver.LocalMemoryOps
 import moe.fuqiuluo.mamu.driver.WuwaDriver
 import moe.fuqiuluo.mamu.floating.adapter.MemoryPreviewAdapter
+import moe.fuqiuluo.mamu.floating.data.local.MemoryBackupManager
 import moe.fuqiuluo.mamu.floating.data.model.*
+import moe.fuqiuluo.mamu.floating.dialog.ModifyValueDialog
+import moe.fuqiuluo.mamu.floating.event.AddressValueChangedEvent
 import moe.fuqiuluo.mamu.floating.event.FloatingEventBus
 import moe.fuqiuluo.mamu.floating.ext.divideToSimpleMemoryRangeParallel
+import moe.fuqiuluo.mamu.utils.ValueTypeUtils
 import moe.fuqiuluo.mamu.widget.NotificationOverlay
 import moe.fuqiuluo.mamu.widget.ToolbarAction
 import moe.fuqiuluo.mamu.widget.multiChoiceDialog
@@ -66,9 +71,9 @@ class MemoryPreviewController(
 
     // 列表适配器
     private val adapter = MemoryPreviewAdapter(
-        onRowClick = { address ->
-            // 点击时已经在 adapter 中切换了选中状态，这里可以做额外操作
-            // TODO: 可以显示编辑对话框或其他操作
+        onRowClick = { memoryRow ->
+            // 点击时显示编辑对话框
+            showModifyValueDialog(memoryRow)
         },
         onNavigationClick = { targetAddress, isNext ->
             // 翻页时清除高亮，直接跳转到页头
@@ -858,6 +863,103 @@ class MemoryPreviewController(
             loadPage(currentStartAddress, targetAddress)
         } else {
             notification.showWarning("请先选择起始地址")
+        }
+    }
+
+    /**
+     * 显示修改内存值对话框
+     */
+    private fun showModifyValueDialog(memoryRow: MemoryPreviewItem.MemoryRow) {
+        if (!WuwaDriver.isProcessBound) {
+            notification.showError("未绑定进程")
+            return
+        }
+
+        val clipboardManager =
+            context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+
+        // 使用 DWORD 作为默认类型，读取当前值
+        val defaultType = DisplayValueType.DWORD
+        coroutineScope.launch {
+            // 异步读取当前内存值
+            val currentValue = withContext(Dispatchers.IO) {
+                try {
+                    val bytes = WuwaDriver.readMemory(memoryRow.address, defaultType.memorySize.toInt())
+                    if (bytes != null) {
+                        ValueTypeUtils.bytesToDisplayValue(bytes, defaultType)
+                    } else {
+                        ""
+                    }
+                } catch (e: Exception) {
+                    ""
+                }
+            }
+
+            // 在主线程显示对话框
+            val dialog = ModifyValueDialog(
+                context = context,
+                notification = notification,
+                clipboardManager = clipboardManager,
+                address = memoryRow.address,
+                currentValue = currentValue,
+                defaultType = defaultType,
+                onConfirm = { addr, oldValue, newValue, valueType ->
+                    try {
+                        val dataBytes = ValueTypeUtils.parseExprToBytes(newValue, valueType)
+
+                        // 保存备份
+                        MemoryBackupManager.saveBackup(addr, oldValue, valueType)
+
+                        val success = WuwaDriver.writeMemory(addr, dataBytes)
+                        if (success) {
+                            // 发送事件通知其他界面同步更新
+                            coroutineScope.launch {
+                                FloatingEventBus.emitAddressValueChanged(
+                                    AddressValueChangedEvent(
+                                        address = addr,
+                                        newValue = newValue,
+                                        valueType = valueType.nativeId,
+                                        source = AddressValueChangedEvent.Source.MEMORY_PREVIEW
+                                    )
+                                )
+                            }
+
+                            // 刷新当前页显示最新值
+                            refreshCurrentPage()
+
+                            notification.showSuccess(
+                                context.getString(
+                                    R.string.modify_success_message,
+                                    String.format("%X", addr)
+                                )
+                            )
+                        } else {
+                            notification.showError(
+                                context.getString(
+                                    R.string.modify_failed_message,
+                                    String.format("%X", addr)
+                                )
+                            )
+                        }
+                    } catch (e: IllegalArgumentException) {
+                        notification.showError(
+                            context.getString(
+                                R.string.error_invalid_value_format,
+                                e.message ?: "Unknown error"
+                            )
+                        )
+                    } catch (e: Exception) {
+                        notification.showError(
+                            context.getString(
+                                R.string.error_modify_failed,
+                                e.message ?: "Unknown error"
+                            )
+                        )
+                    }
+                }
+            )
+
+            dialog.show()
         }
     }
 

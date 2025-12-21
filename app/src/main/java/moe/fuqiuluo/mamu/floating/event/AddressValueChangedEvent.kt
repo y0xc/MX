@@ -11,6 +11,7 @@ data class AddressValueChangedEvent(
 ) {
     enum class Source {
         SEARCH,         // 来自搜索结果界面
-        SAVED_ADDRESS   // 来自保存地址界面
+        SAVED_ADDRESS,  // 来自保存地址界面
+        MEMORY_PREVIEW  // 来自内存预览界面
     }
 }

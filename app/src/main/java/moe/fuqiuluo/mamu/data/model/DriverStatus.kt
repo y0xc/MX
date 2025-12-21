@@ -6,7 +6,7 @@ enum class DriverStatus {
     ERROR
 }
 
-data class DriverInfo(
+data class DashboardDriverInfo(
     val status: DriverStatus,
     val isProcessBound: Boolean = false,
     val boundPid: Int = -1,

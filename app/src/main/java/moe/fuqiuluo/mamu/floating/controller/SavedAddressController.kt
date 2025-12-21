@@ -29,6 +29,7 @@ import moe.fuqiuluo.mamu.floating.data.model.DisplayMemRegionEntry
 import moe.fuqiuluo.mamu.floating.data.model.DisplayProcessInfo
 import moe.fuqiuluo.mamu.floating.data.model.DisplayValueType
 import moe.fuqiuluo.mamu.floating.dialog.BatchModifyValueDialog
+import moe.fuqiuluo.mamu.floating.dialog.ModifyValueDialog
 import moe.fuqiuluo.mamu.floating.dialog.OffsetXorDialog
 import moe.fuqiuluo.mamu.floating.dialog.RemoveOptionsDialog
 import moe.fuqiuluo.mamu.utils.ValueTypeUtils
@@ -56,7 +57,7 @@ class SavedAddressController(
     // 列表适配器
     private val adapter: SavedAddressAdapter = SavedAddressAdapter(
         onItemClick = { address, position ->
-            notification.showWarning("点击了 ${address.name}")
+            showModifyValueDialog(address)
         },
         onFreezeToggle = { address, isFrozen ->
             // 切换冻结状态
@@ -477,6 +478,86 @@ class SavedAddressController(
                 notification.showWarning("成功: $successCount, 失败: $failCount")
             }
         }
+    }
+
+    /**
+     * 显示修改单个地址值的对话框
+     */
+    private fun showModifyValueDialog(address: SavedAddress) {
+        if (!WuwaDriver.isProcessBound) {
+            notification.showError("未绑定进程")
+            return
+        }
+
+        val clipboardManager =
+            context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+
+        val dialog = ModifyValueDialog(
+            context = context,
+            notification = notification,
+            clipboardManager = clipboardManager,
+            savedAddress = address,
+            onConfirm = { addr, oldValue, newValue, valueType ->
+                try {
+                    val dataBytes = ValueTypeUtils.parseExprToBytes(newValue, valueType)
+
+                    // 保存备份
+                    MemoryBackupManager.saveBackup(addr, oldValue, valueType)
+
+                    val success = WuwaDriver.writeMemory(addr, dataBytes)
+                    if (success) {
+                        // 更新内存中的地址值
+                        val index = savedAddresses.indexOfFirst { it.address == addr }
+                        if (index >= 0) {
+                            savedAddresses[index] = savedAddresses[index].copy(value = newValue)
+                            adapter.updateAddress(savedAddresses[index])
+                        }
+
+                        // 发送事件通知其他界面同步更新
+                        coroutineScope.launch {
+                            FloatingEventBus.emitAddressValueChanged(
+                                AddressValueChangedEvent(
+                                    address = addr,
+                                    newValue = newValue,
+                                    valueType = valueType.nativeId,
+                                    source = AddressValueChangedEvent.Source.SAVED_ADDRESS
+                                )
+                            )
+                        }
+
+                        notification.showSuccess(
+                            context.getString(
+                                R.string.modify_success_message,
+                                String.format("%X", addr)
+                            )
+                        )
+                    } else {
+                        notification.showError(
+                            context.getString(
+                                R.string.modify_failed_message,
+                                String.format("%X", addr)
+                            )
+                        )
+                    }
+                } catch (e: IllegalArgumentException) {
+                    notification.showError(
+                        context.getString(
+                            R.string.error_invalid_value_format,
+                            e.message ?: "Unknown error"
+                        )
+                    )
+                } catch (e: Exception) {
+                    notification.showError(
+                        context.getString(
+                            R.string.error_modify_failed,
+                            e.message ?: "Unknown error"
+                        )
+                    )
+                }
+            }
+        )
+
+        dialog.show()
     }
 
     /**

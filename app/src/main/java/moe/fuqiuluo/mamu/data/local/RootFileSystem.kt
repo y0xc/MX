@@ -4,7 +4,9 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.ServiceConnection
+import android.os.Handler
 import android.os.IBinder
+import android.os.Looper
 import android.util.Log
 import com.topjohnwu.superuser.ipc.RootService
 import com.topjohnwu.superuser.nio.ExtendedFile
@@ -21,6 +23,8 @@ object RootFileSystem {
 
     @Volatile
     private var isConnecting = false
+
+    private val mainHandler = Handler(Looper.getMainLooper())
 
     suspend fun connect(context: Context): Boolean = suspendCancellableCoroutine { cont ->
         if (fileSystemManager != null) {
@@ -55,7 +59,11 @@ object RootFileSystem {
         }
 
         val intent = Intent(context, RootFileSystemService::class.java)
-        RootService.bind(intent, connection)
+
+        // RootService.bind() 必须在主线程调用
+        mainHandler.post {
+            RootService.bind(intent, connection)
+        }
 
         cont.invokeOnCancellation {
             isConnecting = false

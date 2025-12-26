@@ -1,9 +1,8 @@
 package moe.fuqiuluo.mamu.utils
 
-import android.content.Context
 import android.util.Log
 import com.topjohnwu.superuser.Shell
-import moe.fuqiuluo.mamu.R
+import java.io.File
 import java.util.concurrent.TimeoutException
 
 /**
@@ -16,40 +15,115 @@ sealed class ShellResult {
 }
 
 /**
+ * Root 方案类型
+ */
+enum class RootProvider {
+    MAGISK,      // Magisk - 支持 FLAG_MOUNT_MASTER
+    KERNELSU,    // KernelSU/APatch/SukiSU - 不支持 FLAG_MOUNT_MASTER
+    UNKNOWN      // 未知 - 使用保守配置
+}
+
+/**
  * Root Shell 执行器
  * 使用 libsu 实现，提供稳定可靠的 root shell 执行能力
+ * 自动检测 Root 方案并使用兼容的配置
  */
 object RootShellExecutor {
     private const val TAG = "RootShellExecutor"
 
-    init {
-        // 配置 libsu
-        // 不使用 FLAG_REDIRECT_STDERR，分开捕获 stdout 和 stderr
-        Shell.enableVerboseLogging = false
-        Shell.setDefaultBuilder(
-            Shell.Builder.create()
-                .setInitializers(ShellInit::class.java)
-                .setFlags(Shell.FLAG_MOUNT_MASTER)
-                .setTimeout(10)
-        )
+    /**
+     * 检测当前设备使用的 Root 方案
+     */
+    val rootProvider: RootProvider by lazy {
+        detectRootProvider().also {
+            Log.d(TAG, "Detected root provider: $it")
+        }
     }
 
-    class ShellInit : Shell.Initializer() {
-        override fun onInit(context: Context, shell: Shell): Boolean {
-            val bashrc = context.resources.openRawResource(R.raw.bashrc)
-            shell.newJob().add(bashrc).exec()
-            return true
+    /**
+     * 是否为 Magisk 环境
+     */
+    val isMagisk: Boolean get() = rootProvider == RootProvider.MAGISK
+
+    /**
+     * 是否为 KernelSU 环境 (包括 KernelSU, APatch, SukiSU 等)
+     */
+    val isKernelSU: Boolean get() = rootProvider == RootProvider.KERNELSU
+
+    private fun detectRootProvider(): RootProvider {
+        // 检测 KernelSU (包括 SukiSU, APatch 等基于 KernelSU 的方案)
+        // KernelSU 的特征路径
+        val kernelSuPaths = listOf(
+            "/data/adb/ksu",
+            "/data/adb/ksud",
+            "/data/adb/ksu/bin/su"
+        )
+        if (kernelSuPaths.any { File(it).exists() }) {
+            return RootProvider.KERNELSU
         }
+
+        // 检测 APatch
+        val apatchPaths = listOf(
+            "/data/adb/ap",
+            "/data/adb/apd"
+        )
+        if (apatchPaths.any { File(it).exists() }) {
+            return RootProvider.KERNELSU // APatch 与 KernelSU 兼容性相同
+        }
+
+        // 检测 Magisk
+        val magiskPaths = listOf(
+            "/data/adb/magisk",
+            "/sbin/.magisk",
+            "/data/adb/magisk.db"
+        )
+        if (magiskPaths.any { File(it).exists() }) {
+            return RootProvider.MAGISK
+        }
+
+        // 通过环境变量检测
+        try {
+            val env = System.getenv("MAGISK_VER_CODE")
+            if (!env.isNullOrEmpty()) {
+                return RootProvider.MAGISK
+            }
+        } catch (_: Exception) {}
+
+        // 默认使用保守配置 (与 KernelSU 相同，不使用 FLAG_MOUNT_MASTER)
+        return RootProvider.UNKNOWN
+    }
+
+    init {
+        // 配置 libsu，根据 Root 方案自动选择配置
+        Shell.enableVerboseLogging = true
+
+        val builder = Shell.Builder.create().setTimeout(10)
+
+        // 只有 Magisk 环境才使用 FLAG_MOUNT_MASTER
+        if (rootProvider == RootProvider.MAGISK) {
+            builder.setFlags(Shell.FLAG_MOUNT_MASTER)
+            Log.d(TAG, "Using Magisk configuration with FLAG_MOUNT_MASTER")
+        } else {
+            Log.d(TAG, "Using KernelSU/Universal configuration without FLAG_MOUNT_MASTER")
+        }
+
+        Shell.setDefaultBuilder(builder)
     }
 
     /**
      * 使用自定义 su 命令配置 Shell
      */
     fun getShellBuilder(suCmd: String): Shell.Builder {
-        return Shell.Builder.create()
-            .setFlags(Shell.FLAG_MOUNT_MASTER)
+        val builder = Shell.Builder.create()
             .setTimeout(10)
             .setCommands(suCmd)
+
+        // 只有 Magisk 环境才使用 FLAG_MOUNT_MASTER
+        if (rootProvider == RootProvider.MAGISK) {
+            builder.setFlags(Shell.FLAG_MOUNT_MASTER)
+        }
+
+        return builder
     }
 
     /**
@@ -64,15 +138,18 @@ object RootShellExecutor {
         timeoutMs: Long = 5000L
     ): ShellResult {
         return try {
+            val shell = Shell.getShell()
+            Log.d(TAG, "Shell status - isRoot: ${shell.isRoot}, isAlive: ${shell.isAlive}")
+            
             val result = if (suCmd == RootConfigManager.DEFAULT_ROOT_COMMAND) {
                 // 使用默认 shell
                 Log.d(TAG, "Shell.cmd($command)")
                 Shell.cmd(command).exec()
             } else {
                 // 使用自定义 su 命令创建新 shell
-                val shell = getShellBuilder(suCmd).build()
-                Log.d(TAG, "Shell.cmd2($command)")
-                shell.newJob().add(command).exec()
+                val customShell = getShellBuilder(suCmd).build()
+                Log.d(TAG, "Shell.cmd2($command) with custom su: $suCmd")
+                customShell.newJob().add(command).exec()
             }
 
             val stdout = result.out.joinToString("\n")

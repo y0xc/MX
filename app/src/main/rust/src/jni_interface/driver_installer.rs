@@ -39,11 +39,11 @@ lazy_static! {
         ),
         (
             ss!("android15-6.6"),
-            ss!("https://vip.123pan.cn/1818969283/ymjew503t0n000d7w32yhlhfwnguynekDIYPBdrzBIi1DvxPAIazAY==.png")
+            ss!("https://vip.123pan.cn/1818969283/yk6baz03t0m000d7w33gvm7laq4fr9zsDIYPBdrzBIi1DvxPAIazAY==.png")
         ),
         (
             ss!("android16-6.12"),
-            ss!("https://vip.123pan.cn/1818969283/yk6baz03t0m000d7w33gud8xee2p1puzDIYPBdrzBIi1DvxPAIazAY==.png")
+            ss!("https://vip.123pan.cn/1818969283/yk6baz03t0m000d7w33gvm7laq4fr9zsDIYPBdrzBIi1DvxPAIazAY==.png")
         ),
     ];
 }

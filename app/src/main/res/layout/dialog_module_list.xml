@@ -94,7 +94,7 @@
                 android:paddingEnd="16dp"
                 android:gravity="center"
                 android:text="历史"
-                android:textColor="@color/floating_text_secondary"
+                android:textColor="@color/floating_text_primary"
                 android:textSize="14sp"
                 android:background="@drawable/bg_button_filter" />
 
@@ -108,7 +108,7 @@
                 android:paddingEnd="16dp"
                 android:gravity="center"
                 android:text="Cd"
-                android:textColor="@color/floating_primary_light"
+                android:textColor="@color/floating_text_primary"
                 android:textSize="14sp"
                 android:background="@drawable/bg_button_filter_outline" />
 
@@ -122,7 +122,7 @@
                 android:paddingEnd="16dp"
                 android:gravity="center"
                 android:text="Cb"
-                android:textColor="@color/floating_primary_light"
+                android:textColor="@color/floating_text_primary"
                 android:textSize="14sp"
                 android:background="@drawable/bg_button_filter_outline" />
 
@@ -136,7 +136,7 @@
                 android:paddingEnd="16dp"
                 android:gravity="center"
                 android:text="Ps"
-                android:textColor="@color/floating_primary_light"
+                android:textColor="@color/floating_text_primary"
                 android:textSize="14sp"
                 android:background="@drawable/bg_button_filter_outline" />
 
@@ -150,7 +150,7 @@
                 android:paddingEnd="16dp"
                 android:gravity="center"
                 android:text="Xa"
-                android:textColor="@color/floating_primary_light"
+                android:textColor="@color/floating_text_primary"
                 android:textSize="14sp"
                 android:background="@drawable/bg_button_filter_outline" />
 
@@ -166,7 +166,7 @@
         android:layout_marginTop="@dimen/floating_spacing_sm"
         android:gravity="center"
         android:text="All"
-        android:textColor="@color/floating_text_secondary"
+        android:textColor="@color/floating_text_primary"
         android:textSize="16sp"
         android:background="@drawable/bg_button_all" />
 

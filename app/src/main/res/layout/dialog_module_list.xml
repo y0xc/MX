@@ -7,7 +7,9 @@
     android:layout_height="wrap_content"
     android:background="@drawable/dialog_background"
     android:orientation="vertical"
-    android:padding="@dimen/floating_spacing_md">
+    android:padding="@dimen/floating_spacing_md"
+    app:maxWidthPercent="0.8"
+    app:maxHeightPercent="0.9">
 
     <!-- 地址输入区域 -->
     <LinearLayout
@@ -106,7 +108,7 @@
                 android:paddingEnd="16dp"
                 android:gravity="center"
                 android:text="Cd"
-                android:textColor="#C9A07A"
+                android:textColor="@color/floating_primary_light"
                 android:textSize="14sp"
                 android:background="@drawable/bg_button_filter_outline" />
 
@@ -120,7 +122,7 @@
                 android:paddingEnd="16dp"
                 android:gravity="center"
                 android:text="Cb"
-                android:textColor="#C9A07A"
+                android:textColor="@color/floating_primary_light"
                 android:textSize="14sp"
                 android:background="@drawable/bg_button_filter_outline" />
 
@@ -134,7 +136,7 @@
                 android:paddingEnd="16dp"
                 android:gravity="center"
                 android:text="Ps"
-                android:textColor="#C9A07A"
+                android:textColor="@color/floating_primary_light"
                 android:textSize="14sp"
                 android:background="@drawable/bg_button_filter_outline" />
 
@@ -148,7 +150,7 @@
                 android:paddingEnd="16dp"
                 android:gravity="center"
                 android:text="Xa"
-                android:textColor="#C9A07A"
+                android:textColor="@color/floating_primary_light"
                 android:textSize="14sp"
                 android:background="@drawable/bg_button_filter_outline" />
 
@@ -197,8 +199,8 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="取消"
-            android:textColor="#C9A07A"
-            app:rippleColor="#30C9A07A" />
+            android:textColor="@color/floating_primary_light"
+            app:rippleColor="#3064B5F6" />
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btnGoto"
@@ -207,8 +209,8 @@
             android:layout_height="wrap_content"
             android:layout_marginStart="@dimen/floating_spacing_sm"
             android:text="转到"
-            android:textColor="#C9A07A"
-            app:rippleColor="#30C9A07A" />
+            android:textColor="@color/floating_primary_light"
+            app:rippleColor="#3064B5F6" />
 
     </LinearLayout>
 

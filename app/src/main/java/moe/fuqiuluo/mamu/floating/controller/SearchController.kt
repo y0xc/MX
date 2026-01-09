@@ -39,6 +39,8 @@ import moe.fuqiuluo.mamu.floating.dialog.SearchDialogState
 import moe.fuqiuluo.mamu.floating.data.model.DisplayMemRegionEntry
 import moe.fuqiuluo.mamu.floating.data.model.DisplayProcessInfo
 import moe.fuqiuluo.mamu.floating.data.model.DisplayValueType
+import moe.fuqiuluo.mamu.floating.data.model.MemoryRange
+import moe.fuqiuluo.mamu.floating.data.model.SavedAddress
 import moe.fuqiuluo.mamu.floating.data.model.MemoryBackupRecord
 import moe.fuqiuluo.mamu.floating.dialog.AddressActionDialog
 import moe.fuqiuluo.mamu.floating.dialog.ExportAddressDialog
@@ -267,6 +269,13 @@ class SearchController(
                 label = "导出选择项"
             ) {
                 exportSelectedAddresses()
+            },
+            ToolbarAction(
+                id = 17,
+                icon = R.drawable.compare_arrows_24px,
+                label = "计算偏移异或"
+            ) {
+                calculateOffsetXor()
             },
         )
 
@@ -1176,6 +1185,54 @@ class SearchController(
                     initialBaseAddress = initialBaseAddress
                 )
             )
+        }
+    }
+
+    /**
+     * 计算选中地址的偏移异或
+     */
+    private fun calculateOffsetXor() {
+        val selectedItems = searchResultAdapter.getSelectedItems()
+        if (selectedItems.size < 2) {
+            notification.showWarning("请至少选择 2 个地址")
+            return
+        }
+
+        val ranges = getRanges()
+        val tempAddresses = selectedItems.mapNotNull { item ->
+            when (item) {
+                is ExactSearchResultItem -> {
+                    val range = ranges?.find { range ->
+                        item.address >= range.start && item.address < range.end
+                    }?.range ?: MemoryRange.O
+                    SavedAddress(
+                        address = item.address,
+                        name = "0x${item.address.toString(16).uppercase()}",
+                        valueType = item.valueType,
+                        value = item.value,
+                        isFrozen = false,
+                        range = range
+                    )
+                }
+                is FuzzySearchResultItem -> {
+                    val range = ranges?.find { range ->
+                        item.address >= range.start && item.address < range.end
+                    }?.range ?: MemoryRange.O
+                    SavedAddress(
+                        address = item.address,
+                        name = "0x${item.address.toString(16).uppercase()}",
+                        valueType = item.valueType,
+                        value = item.value,
+                        isFrozen = false,
+                        range = range
+                    )
+                }
+                else -> null
+            }
+        }
+
+        coroutineScope.launch {
+            FloatingEventBus.emitUIAction(UIActionEvent.ShowOffsetXorDialog(tempAddresses))
         }
     }
 

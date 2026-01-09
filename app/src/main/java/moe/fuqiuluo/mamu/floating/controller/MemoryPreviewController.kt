@@ -198,7 +198,7 @@ class MemoryPreviewController(
             ToolbarAction(4, R.drawable.flip_to_front_24px, "交叉勾选") { crossSelectBetween() },
             ToolbarAction(5, R.drawable.search_check_24px, "选定为搜索结果") { setSelectedAsSearchResults() },
             ToolbarAction(6, R.drawable.deselect_24px, "清除选择") { adapter.clearSelection() },
-            ToolbarAction(7, R.drawable.type_xor_24px, "计算偏移异或") { calculateOffsetXor() },
+            ToolbarAction(7, R.drawable.compare_arrows_24px, "计算偏移异或") { calculateOffsetXor() },
             ToolbarAction(8, R.drawable.select_all_24px, "全选") { adapter.selectAll() },
             ToolbarAction(9, R.drawable.flip_to_front_24px, "反选") { adapter.invertSelection() },
         )

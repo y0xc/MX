@@ -366,7 +366,7 @@ class SavedAddressController(
             },
             ToolbarAction(
                 id = 9,
-                icon = R.drawable.type_xor_24px,
+                icon = R.drawable.compare_arrows_24px,
                 label = "计算偏移异或"
             ) {
                 calculateOffsetXor()

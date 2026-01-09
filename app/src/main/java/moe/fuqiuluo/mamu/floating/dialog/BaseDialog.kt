@@ -10,9 +10,12 @@ abstract class BaseDialog(
     protected val context: Context,
 ) {
     var onCancel: (() -> Unit)? = null
+    var onDismiss: (() -> Unit)? = null
 
     protected val dialog = Dialog(context, R.style.CustomDarkDialogTheme)
     private var isDialogSetup = false
+
+    val isShowing: Boolean get() = dialog.isShowing
 
     init {
         dialog.window?.setType(
@@ -23,6 +26,7 @@ abstract class BaseDialog(
                 WindowManager.LayoutParams.TYPE_SYSTEM_ALERT
             }
         )
+        dialog.setOnDismissListener { onDismiss?.invoke() }
     }
 
     abstract fun setupDialog()

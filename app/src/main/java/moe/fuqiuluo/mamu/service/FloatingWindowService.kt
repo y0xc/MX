@@ -52,10 +52,10 @@ import moe.fuqiuluo.mamu.floating.controller.SearchController
 import moe.fuqiuluo.mamu.floating.controller.SettingsController
 import moe.fuqiuluo.mamu.floating.data.model.DisplayProcessInfo
 import moe.fuqiuluo.mamu.floating.data.model.MemoryRange
+import moe.fuqiuluo.mamu.floating.dialog.CustomDialog
 import moe.fuqiuluo.mamu.floating.dialog.MemoryRangeDialog
 import moe.fuqiuluo.mamu.floating.dialog.OffsetCalculatorDialog
 import moe.fuqiuluo.mamu.floating.dialog.OffsetXorDialog
-import moe.fuqiuluo.mamu.floating.dialog.customDialog
 import moe.fuqiuluo.mamu.floating.event.FloatingEventBus
 import moe.fuqiuluo.mamu.floating.event.NavigateToMemoryAddressEvent
 import moe.fuqiuluo.mamu.floating.event.ProcessStateEvent
@@ -116,6 +116,9 @@ class FloatingWindowService : Service(), ProcessDeathMonitor.Callback {
 
     // 标记是否正在程序化切换tab（避免递归回调）
     private var isProgrammaticTabSwitch = false
+
+    // 进程选择对话框显示锁（防止重复弹出）
+    private val isProcessDialogShowing = java.util.concurrent.atomic.AtomicBoolean(false)
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -438,6 +441,9 @@ class FloatingWindowService : Service(), ProcessDeathMonitor.Callback {
      */
     @SuppressLint("SetTextI18n")
     private fun showProcessSelectionDialog() {
+        // 原子操作：尝试获取锁，失败则说明已有 dialog 正在显示
+        if (!isProcessDialogShowing.compareAndSet(false, true)) return
+
         coroutineScope.launch {
             runCatching {
                 val mmkv = MMKV.defaultMMKV()
@@ -504,21 +510,25 @@ class FloatingWindowService : Service(), ProcessDeathMonitor.Callback {
                 }
 
                 val adapter = ProcessListAdapter(this@FloatingWindowService, processList)
-                this@FloatingWindowService.customDialog(
+                CustomDialog(
+                    context = this@FloatingWindowService,
                     title = getString(R.string.settings_select_process),
                     adapter = adapter,
+                ).apply {
                     onItemClick = { position ->
                         val selectedProcess = processList[position]
-                        // 发送绑定进程请求事件，由 Service 统一处理绑定逻辑
                         coroutineScope.launch {
                             FloatingEventBus.emitUIAction(
-                                UIActionEvent.BindProcessRequest(
-                                    selectedProcess
-                                )
+                                UIActionEvent.BindProcessRequest(selectedProcess)
                             )
                         }
-                    })
+                    }
+                    onCancel = { isProcessDialogShowing.set(false) }
+                    onDismiss = { isProcessDialogShowing.set(false) }
+                    show()
+                }
             }.onFailure {
+                isProcessDialogShowing.set(false)
                 Log.e(TAG, it.stackTraceToString())
                 notification.showError("加载进程列表失败: ${it.message}")
             }
@@ -951,7 +961,7 @@ class FloatingWindowService : Service(), ProcessDeathMonitor.Callback {
         val tab = fullscreenBinding.tabLayout.getTabAt(tabIndex)
         // 更新侧边栏 NavigationRail 的 Badge（横屏模式）
         val menuItemId = getNavigationItemIdByIndex(tabIndex)
-        
+
         if (count <= 0 && (total == null || total <= 0)) {
             // 清除 Badge
             tab?.removeBadge()
@@ -959,7 +969,7 @@ class FloatingWindowService : Service(), ProcessDeathMonitor.Callback {
         } else {
             // 计算显示文本
             val badgeText = if (count > 9999) "9999+" else "$count"
-            
+
             // 更新 TabLayout Badge
             tab?.let {
                 val badge = it.orCreateBadge
@@ -977,7 +987,7 @@ class FloatingWindowService : Service(), ProcessDeathMonitor.Callback {
                     }
                 }
             }
-            
+
             // 更新 NavigationRail Badge
             val railBadge = fullscreenBinding.sidebarNavigationRail.getOrCreateBadge(menuItemId)
             railBadge.backgroundColor = getColor(R.color.floating_primary)
@@ -1217,7 +1227,7 @@ class FloatingWindowService : Service(), ProcessDeathMonitor.Callback {
             floatingIconView.setImageResource(R.mipmap.ic_launcher)
             return
         }
-        
+
         // 直接使用 DisplayProcessInfo 中已经获取好的 icon
         fullscreenIconView.setImageDrawable(process.icon)
         sidebarIconView.setImageDrawable(process.icon)

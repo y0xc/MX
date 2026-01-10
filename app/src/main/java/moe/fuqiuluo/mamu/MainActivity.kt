@@ -14,6 +14,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import moe.fuqiuluo.mamu.data.local.RootFileSystem
 import moe.fuqiuluo.mamu.data.settings.autoStartFloatingWindow
+import moe.fuqiuluo.mamu.floating.FloatingWindowStateManager
 import moe.fuqiuluo.mamu.service.FloatingWindowService
 import moe.fuqiuluo.mamu.ui.screen.MainScreen
 import moe.fuqiuluo.mamu.ui.theme.MXTheme
@@ -23,6 +24,10 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+
+        // 同步悬浮窗状态，确保 UI 显示与服务实际状态一致
+        FloatingWindowStateManager.syncWithServiceState(this)
+
         setContent {
             MXTheme {
                 // 步骤3: 在Activity中计算WindowSizeClass并传递给Composable

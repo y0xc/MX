@@ -1071,6 +1071,9 @@ class FloatingWindowService : Service(), ProcessDeathMonitor.Callback {
         fullscreenView.visibility = View.GONE
         floatingIconView.visibility = View.VISIBLE
 
+        // 刷新内存浏览界面
+        memoryPreviewController.refreshSilently()
+
         // 恢复显示所有实时监视器
         RealtimeMonitorOverlay.showAll()
     }
@@ -1081,6 +1084,9 @@ class FloatingWindowService : Service(), ProcessDeathMonitor.Callback {
 
         fullscreenView.visibility = View.VISIBLE
         floatingIconView.visibility = View.GONE
+
+        // 刷新内存浏览界面
+        memoryPreviewController.refreshSilently()
 
         // 重新显示搜索进度对话框（如果正在搜索）
         searchController.showSearchProgressIfNeeded()

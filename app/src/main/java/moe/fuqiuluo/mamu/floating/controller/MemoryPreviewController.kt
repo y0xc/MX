@@ -502,6 +502,14 @@ class MemoryPreviewController(
         notification.showSuccess("已刷新")
     }
 
+    /**
+     * 静默刷新当前视图（不显示通知）
+     * 用于悬浮窗打开/关闭时自动刷新
+     */
+    fun refreshSilently() {
+        adapter.refreshAll()
+    }
+
     private fun showAddressActionDialog(memoryRow: MemoryPreviewItem.MemoryRow) {
         if (!WuwaDriver.isProcessBound) {
             notification.showError("未绑定进程")

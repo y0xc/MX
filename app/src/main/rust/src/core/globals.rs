@@ -1,12 +1,16 @@
 //! Global state management for core components
 
 use crate::core::driver_manager::DriverManager;
+use crate::core::freeze_manager::FreezeManager;
 use lazy_static::lazy_static;
 use std::sync::RwLock;
 use tokio::runtime::Runtime;
 
 lazy_static! {
     pub static ref DRIVER_MANAGER: RwLock<DriverManager> = RwLock::new(DriverManager::new());
+
+    /// Global freeze manager for value freezing
+    pub static ref FREEZE_MANAGER: RwLock<FreezeManager> = RwLock::new(FreezeManager::new());
 
     /// Global tokio runtime for async tasks
     /// 使用多线程运行时，worker threads 数量为 CPU 核心数

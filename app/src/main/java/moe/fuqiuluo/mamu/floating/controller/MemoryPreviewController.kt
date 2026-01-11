@@ -24,6 +24,7 @@ import moe.fuqiuluo.mamu.data.settings.memoryPreviewInfiniteScroll
 import moe.fuqiuluo.mamu.data.settings.memoryRegionCacheInterval
 import moe.fuqiuluo.mamu.databinding.FloatingMemoryPreviewLayoutBinding
 import moe.fuqiuluo.mamu.driver.LocalMemoryOps
+import moe.fuqiuluo.mamu.driver.FreezeManager
 import moe.fuqiuluo.mamu.driver.SearchEngine
 import moe.fuqiuluo.mamu.driver.WuwaDriver
 import moe.fuqiuluo.mamu.floating.adapter.InfiniteMemoryAdapter
@@ -41,6 +42,7 @@ import moe.fuqiuluo.mamu.floating.dialog.ModifyValueDialog
 import moe.fuqiuluo.mamu.floating.dialog.ModuleListDialog
 import moe.fuqiuluo.mamu.floating.event.AddressValueChangedEvent
 import moe.fuqiuluo.mamu.floating.event.FloatingEventBus
+import moe.fuqiuluo.mamu.floating.event.SaveAndFreezeEvent
 import moe.fuqiuluo.mamu.floating.event.SaveMemoryPreviewEvent
 import moe.fuqiuluo.mamu.floating.event.SearchResultsUpdatedEvent
 import moe.fuqiuluo.mamu.floating.event.UIActionEvent
@@ -575,7 +577,7 @@ class MemoryPreviewController(
                 address = memoryRow.address,
                 currentValue = currentValue,
                 defaultType = defaultType,
-                onConfirm = { addr, oldValue, newValue, valueType ->
+                onConfirm = { addr, oldValue, newValue, valueType, freeze ->
                     try {
                         val dataBytes = ValueTypeUtils.parseExprToBytes(newValue, valueType)
                         MemoryBackupManager.saveBackup(addr, oldValue, valueType)
@@ -587,6 +589,28 @@ class MemoryPreviewController(
                                         AddressValueChangedEvent.Source.MEMORY_PREVIEW)
                                 )
                             }
+                            
+                            // 如果勾选了冻结，保存到地址列表并冻结
+                            if (freeze) {
+                                coroutineScope.launch {
+                                    // 查找对应的内存范围
+                                    val range = memoryRegions.find { region ->
+                                        addr >= region.start && addr < region.end
+                                    }
+                                    // 发送保存并冻结事件
+                                    FloatingEventBus.emitSaveAndFreeze(
+                                        SaveAndFreezeEvent(
+                                            address = addr,
+                                            value = newValue,
+                                            valueType = valueType,
+                                            range = range
+                                        )
+                                    )
+                                }
+                                // 直接添加到冻结管理器
+                                FreezeManager.addFrozen(addr, dataBytes, valueType.nativeId)
+                            }
+                            
                             val pageAddress = (addr / PAGE_SIZE) * PAGE_SIZE
                             adapter.refreshPage(pageAddress)
                             notification.showSuccess(context.getString(R.string.modify_success_message, String.format("%X", addr)))

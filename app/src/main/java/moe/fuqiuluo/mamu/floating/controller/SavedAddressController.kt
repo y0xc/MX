@@ -22,6 +22,7 @@ import moe.fuqiuluo.mamu.R
 import moe.fuqiuluo.mamu.data.settings.saveListUpdateInterval
 import moe.fuqiuluo.mamu.databinding.FloatingSavedAddressesLayoutBinding
 import moe.fuqiuluo.mamu.driver.ExactSearchResultItem
+import moe.fuqiuluo.mamu.driver.FreezeManager
 import moe.fuqiuluo.mamu.driver.FuzzySearchResultItem
 import moe.fuqiuluo.mamu.driver.SearchEngine
 import moe.fuqiuluo.mamu.driver.WuwaDriver
@@ -45,6 +46,7 @@ import moe.fuqiuluo.mamu.floating.event.AddressValueChangedEvent
 import moe.fuqiuluo.mamu.floating.event.BatchAddressValueChangedEvent
 import moe.fuqiuluo.mamu.floating.event.FloatingEventBus
 import moe.fuqiuluo.mamu.floating.event.ProcessStateEvent
+import moe.fuqiuluo.mamu.floating.event.SaveAndFreezeEvent
 import moe.fuqiuluo.mamu.floating.event.SearchResultsUpdatedEvent
 import moe.fuqiuluo.mamu.floating.event.UIActionEvent
 import moe.fuqiuluo.mamu.utils.ByteFormatUtils.formatBytes
@@ -75,12 +77,7 @@ class SavedAddressController(
             true
         },
         onFreezeToggle = { address, isFrozen ->
-            // 切换冻结状态
-            val index = savedAddresses.indexOfFirst { it.address == address.address }
-            if (index >= 0) {
-                savedAddresses[index] = savedAddresses[index].copy(isFrozen = isFrozen)
-                notification.showSuccess(if (isFrozen) "已冻结" else "已解除冻结")
-            }
+            handleFreezeToggle(address, isFrozen)
         },
         onItemDelete = { address ->
             deleteAddress(address.address)
@@ -105,6 +102,7 @@ class SavedAddressController(
         subscribeToProcessStateEvents()
         subscribeToSaveSearchResultsEvents()
         subscribeToSaveMemoryPreviewEvents()
+        subscribeToSaveAndFreezeEvents()
     }
 
     /**
@@ -236,6 +234,46 @@ class SavedAddressController(
                 }
 
                 saveAddresses(addresses)
+            }
+        }
+    }
+
+    /**
+     * 订阅保存并冻结地址事件
+     */
+    private fun subscribeToSaveAndFreezeEvents() {
+        coroutineScope.launch {
+            FloatingEventBus.saveAndFreezeEvents.collect { event ->
+                // 检查地址是否已存在
+                val existingIndex = savedAddresses.indexOfFirst { it.address == event.address }
+                
+                if (existingIndex >= 0) {
+                    // 地址已存在，更新值和冻结状态
+                    savedAddresses[existingIndex] = savedAddresses[existingIndex].copy(
+                        value = event.value,
+                        valueType = event.valueType.nativeId,
+                        isFrozen = true
+                    )
+                    adapter.updateAddress(savedAddresses[existingIndex])
+                } else {
+                    // 地址不存在，创建新的 SavedAddress
+                    val range = event.range?.range ?: MemoryRange.O
+                    val newAddress = SavedAddress(
+                        address = event.address,
+                        name = "Var #${String.format("%X", event.address)}",
+                        valueType = event.valueType.nativeId,
+                        value = event.value,
+                        isFrozen = true,
+                        range = range
+                    )
+                    savedAddresses.add(newAddress)
+                    adapter.setAddresses(savedAddresses)
+                    updateEmptyState()
+                    updateAddressCountBadge()
+                    updateSavedCountText()
+                }
+                
+                notification.showSuccess("已保存并冻结: 0x${event.address.toString(16).uppercase()}")
             }
         }
     }
@@ -514,6 +552,9 @@ class SavedAddressController(
      * 删除地址
      */
     private fun deleteAddress(address: Long) {
+        // 如果该地址被冻结，先取消冻结
+        FreezeManager.removeFrozen(address)
+        
         savedAddresses.removeIf { it.address == address }
         adapter.setAddresses(savedAddresses)
         updateEmptyState()
@@ -526,6 +567,9 @@ class SavedAddressController(
      * 清空所有地址（进程切换或死亡时调用）
      */
     fun clearAll() {
+        // 清空所有冻结
+        FreezeManager.clearAll()
+        
         savedAddresses.clear()
         adapter.setAddresses(emptyList())
         updateEmptyState()
@@ -653,7 +697,7 @@ class SavedAddressController(
             notification = notification,
             clipboardManager = clipboardManager,
             savedAddress = address,
-            onConfirm = { addr, oldValue, newValue, valueType ->
+            onConfirm = { addr, oldValue, newValue, valueType, freeze ->
                 try {
                     val dataBytes = ValueTypeUtils.parseExprToBytes(newValue, valueType)
 
@@ -665,8 +709,18 @@ class SavedAddressController(
                         // 更新内存中的地址值
                         val index = savedAddresses.indexOfFirst { it.address == addr }
                         if (index >= 0) {
-                            savedAddresses[index] = savedAddresses[index].copy(value = newValue)
+                            // 更新冻结状态
+                            val newFrozenState = freeze || savedAddresses[index].isFrozen
+                            savedAddresses[index] = savedAddresses[index].copy(
+                                value = newValue,
+                                isFrozen = newFrozenState
+                            )
                             adapter.updateAddress(savedAddresses[index])
+                            
+                            // 如果需要冻结，更新冻结的值
+                            if (newFrozenState) {
+                                FreezeManager.addFrozen(addr, dataBytes, valueType.nativeId)
+                            }
                         }
 
                         // 发送事件通知其他界面同步更新
@@ -785,6 +839,11 @@ class SavedAddressController(
                         if (addrIndex >= 0) {
                             savedAddresses[addrIndex] = item.copy(value = newValue)
                             adapter.updateAddress(savedAddresses[addrIndex])
+                            
+                            // 如果该地址被冻结，更新冻结的值
+                            if (savedAddresses[addrIndex].isFrozen) {
+                                FreezeManager.addFrozen(item.address, dataBytes, valueType.nativeId)
+                            }
                         }
                         successfulChanges.add(
                             BatchAddressValueChangedEvent.AddressChange(
@@ -1464,6 +1523,41 @@ class SavedAddressController(
             } catch (e: Exception) {
                 // 忽略单个地址的错误，继续处理其他地址
             }
+        }
+    }
+
+    /**
+     * 处理冻结状态切换
+     */
+    private fun handleFreezeToggle(address: SavedAddress, isFrozen: Boolean) {
+        val index = savedAddresses.indexOfFirst { it.address == address.address }
+        if (index < 0) return
+
+        // 更新内存中的状态
+        savedAddresses[index] = savedAddresses[index].copy(isFrozen = isFrozen)
+
+        if (isFrozen) {
+            // 添加到冻结管理器
+            val valueType = DisplayValueType.fromNativeId(address.valueType)
+            if (valueType != null) {
+                val success = FreezeManager.addFrozen(address.address, address.value, valueType)
+                if (success) {
+                    notification.showSuccess("已冻结: 0x${address.address.toString(16).uppercase()}")
+                } else {
+                    notification.showError("冻结失败")
+                    // 回滚状态
+                    savedAddresses[index] = savedAddresses[index].copy(isFrozen = false)
+                    adapter.notifyItemChanged(index)
+                }
+            } else {
+                notification.showError("不支持的值类型")
+                savedAddresses[index] = savedAddresses[index].copy(isFrozen = false)
+                adapter.notifyItemChanged(index)
+            }
+        } else {
+            // 从冻结管理器移除
+            FreezeManager.removeFrozen(address.address)
+            notification.showSuccess("已解除冻结")
         }
     }
 

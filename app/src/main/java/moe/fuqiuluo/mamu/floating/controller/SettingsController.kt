@@ -32,6 +32,7 @@ import moe.fuqiuluo.mamu.data.settings.selectedMemoryRanges
 import moe.fuqiuluo.mamu.data.settings.skipMemoryOption
 import moe.fuqiuluo.mamu.data.settings.tabSwitchAnimation
 import moe.fuqiuluo.mamu.data.settings.topMostLayer
+import moe.fuqiuluo.mamu.driver.FreezeManager
 import moe.fuqiuluo.mamu.driver.SearchEngine
 import moe.fuqiuluo.mamu.floating.data.model.DisplayProcessInfo
 import moe.fuqiuluo.mamu.widget.NotificationOverlay
@@ -186,12 +187,17 @@ class SettingsController(
             val currentValue = mmkv.freezeInterval
             seekbarFreezeInterval.value = currentValue.toFloat()
             freezeIntervalValue.text = "$currentValue μs"
+            
+            // 同步初始值到 FreezeManager
+            FreezeManager.setInterval(currentValue.toLong())
 
             seekbarFreezeInterval.addOnChangeListener { _, value, fromUser ->
                 val intValue = value.toInt()
                 freezeIntervalValue.text = "$intValue μs"
                 if (fromUser) {
                     mmkv.freezeInterval = intValue
+                    // 同步到 FreezeManager
+                    FreezeManager.setInterval(intValue.toLong())
                 }
             }
         }

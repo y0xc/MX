@@ -14,10 +14,12 @@ import moe.fuqiuluo.mamu.floating.event.AddressValueChangedEvent
 import moe.fuqiuluo.mamu.floating.event.BatchAddressValueChangedEvent
 import moe.fuqiuluo.mamu.floating.event.FloatingEventBus
 import moe.fuqiuluo.mamu.floating.event.ProcessStateEvent
+import moe.fuqiuluo.mamu.floating.event.SaveAndFreezeEvent
 import moe.fuqiuluo.mamu.floating.event.SaveSearchResultsEvent
 import moe.fuqiuluo.mamu.floating.event.SearchResultsUpdatedEvent
 import moe.fuqiuluo.mamu.databinding.FloatingSearchLayoutBinding
 import moe.fuqiuluo.mamu.driver.ExactSearchResultItem
+import moe.fuqiuluo.mamu.driver.FreezeManager
 import moe.fuqiuluo.mamu.driver.FuzzyCondition
 import moe.fuqiuluo.mamu.driver.FuzzySearchResultItem
 import moe.fuqiuluo.mamu.driver.PointerChainResult
@@ -870,6 +872,15 @@ class SearchController(
         return searchResultAdapter.getRanges()
     }
 
+    /**
+     * 根据地址查找对应的内存范围
+     */
+    private fun getRangeForAddress(address: Long): DisplayMemRegionEntry? {
+        return getRanges()?.find { range ->
+            address >= range.start && address < range.end
+        }
+    }
+
     private fun saveSelectedAddresses() {
         val selectedItems = searchResultAdapter.getSelectedItems()
         if (selectedItems.isEmpty()) {
@@ -983,7 +994,7 @@ class SearchController(
             notification = notification,
             clipboardManager = clipboardManager,
             searchResultItem = result,
-            onConfirm = { address, oldValue, newValue, valueType ->
+            onConfirm = { address, oldValue, newValue, valueType, freeze ->
                 if (!WuwaDriver.isProcessBound) {
                     notification.showError("未选中任何进程")
                     return@ModifyValueDialog
@@ -1010,6 +1021,23 @@ class SearchController(
                                     source = AddressValueChangedEvent.Source.SEARCH
                                 )
                             )
+                        }
+
+                        // 如果勾选了冻结，保存到地址列表并冻结
+                        if (freeze) {
+                            coroutineScope.launch {
+                                // 发送保存并冻结事件
+                                FloatingEventBus.emitSaveAndFreeze(
+                                    SaveAndFreezeEvent(
+                                        address = address,
+                                        value = newValue,
+                                        valueType = valueType,
+                                        range = getRangeForAddress(address)
+                                    )
+                                )
+                            }
+                            // 直接添加到冻结管理器
+                            FreezeManager.addFrozen(address, dataBytes, valueType.nativeId)
                         }
 
                         notification.showSuccess(

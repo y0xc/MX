@@ -72,6 +72,13 @@ object FloatingEventBus {
     )
     val saveMemoryPreviewEvents: SharedFlow<SaveMemoryPreviewEvent> = _saveMemoryPreviewEvents.asSharedFlow()
 
+    // 保存并冻结地址事件流
+    private val _saveAndFreezeEvents = MutableSharedFlow<SaveAndFreezeEvent>(
+        replay = 0,
+        extraBufferCapacity = 8
+    )
+    val saveAndFreezeEvents: SharedFlow<SaveAndFreezeEvent> = _saveAndFreezeEvents.asSharedFlow()
+
     /**
      * 发送地址值变更事件（单个）
      */
@@ -134,5 +141,12 @@ object FloatingEventBus {
      */
     suspend fun emitSaveMemoryPreview(event: SaveMemoryPreviewEvent) {
         _saveMemoryPreviewEvents.emit(event)
+    }
+
+    /**
+     * 发送保存并冻结地址事件
+     */
+    suspend fun emitSaveAndFreeze(event: SaveAndFreezeEvent) {
+        _saveAndFreezeEvents.emit(event)
     }
 }

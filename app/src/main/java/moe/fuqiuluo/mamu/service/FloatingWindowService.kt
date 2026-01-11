@@ -41,6 +41,7 @@ import moe.fuqiuluo.mamu.data.settings.selectedMemoryRanges
 import moe.fuqiuluo.mamu.data.settings.topMostLayer
 import moe.fuqiuluo.mamu.databinding.FloatingFullscreenLayoutBinding
 import moe.fuqiuluo.mamu.databinding.FloatingWindowLayoutBinding
+import moe.fuqiuluo.mamu.driver.FreezeManager
 import moe.fuqiuluo.mamu.driver.ProcessDeathMonitor
 import moe.fuqiuluo.mamu.driver.WuwaDriver
 import moe.fuqiuluo.mamu.floating.FloatingWindowStateManager
@@ -352,6 +353,8 @@ class FloatingWindowService : Service(), ProcessDeathMonitor.Callback {
 
         // 如果当前有绑定的进程，先解绑
         if (WuwaDriver.isProcessBound) {
+            FreezeManager.clearAll()
+            FreezeManager.stop()
             WuwaDriver.unbindProcess()
             ProcessDeathMonitor.stop()
         }
@@ -365,6 +368,9 @@ class FloatingWindowService : Service(), ProcessDeathMonitor.Callback {
 
             // 启动进程死亡监控
             ProcessDeathMonitor.start(process.pid, this)
+            
+            // 启动冻结管理器
+            FreezeManager.start()
         }.onFailure {
             it.printStackTrace()
             notification.showError(
@@ -407,6 +413,10 @@ class FloatingWindowService : Service(), ProcessDeathMonitor.Callback {
             }
         }
 
+        // 停止冻结管理器并清空冻结
+        FreezeManager.clearAll()
+        FreezeManager.stop()
+
         WuwaDriver.unbindProcess()
         ProcessDeathMonitor.stop()
 
@@ -423,6 +433,10 @@ class FloatingWindowService : Service(), ProcessDeathMonitor.Callback {
      */
     private fun handleProcessDied(pid: Int) {
         notification.showError(getString(R.string.error_process_died, pid))
+
+        // 停止冻结管理器并清空冻结
+        FreezeManager.clearAll()
+        FreezeManager.stop()
 
         if (WuwaDriver.isProcessBound) {
             WuwaDriver.unbindProcess()

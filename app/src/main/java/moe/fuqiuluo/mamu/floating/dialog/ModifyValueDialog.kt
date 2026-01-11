@@ -36,7 +36,7 @@ class ModifyValueDialog : BaseDialog {
     private var notification: NotificationOverlay
     private var clipboardManager: ClipboardManager
     private var modifyTarget: ModifyTarget
-    private var onConfirm: ((address: Long, oldValue: String, newValue: String, valueType: DisplayValueType) -> Unit)? = null
+    private var onConfirm: ((address: Long, oldValue: String, newValue: String, valueType: DisplayValueType, freeze: Boolean) -> Unit)? = null
 
     private val coroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
@@ -51,7 +51,7 @@ class ModifyValueDialog : BaseDialog {
         notification: NotificationOverlay,
         clipboardManager: ClipboardManager,
         searchResultItem: SearchResultItem,
-        onConfirm: ((address: Long, oldValue: String, newValue: String, valueType: DisplayValueType) -> Unit)? = null
+        onConfirm: ((address: Long, oldValue: String, newValue: String, valueType: DisplayValueType, freeze: Boolean) -> Unit)? = null
     ) : super(context) {
         this.notification = notification
         this.clipboardManager = clipboardManager
@@ -85,7 +85,7 @@ class ModifyValueDialog : BaseDialog {
         notification: NotificationOverlay,
         clipboardManager: ClipboardManager,
         savedAddress: SavedAddress,
-        onConfirm: ((address: Long, oldValue: String, newValue: String, valueType: DisplayValueType) -> Unit)? = null
+        onConfirm: ((address: Long, oldValue: String, newValue: String, valueType: DisplayValueType, freeze: Boolean) -> Unit)? = null
     ) : super(context) {
         this.notification = notification
         this.clipboardManager = clipboardManager
@@ -106,7 +106,7 @@ class ModifyValueDialog : BaseDialog {
         address: Long,
         currentValue: String = "",
         defaultType: DisplayValueType = DisplayValueType.DWORD,
-        onConfirm: ((address: Long, oldValue: String, newValue: String, valueType: DisplayValueType) -> Unit)? = null
+        onConfirm: ((address: Long, oldValue: String, newValue: String, valueType: DisplayValueType, freeze: Boolean) -> Unit)? = null
     ) : super(context) {
         this.notification = notification
         this.clipboardManager = clipboardManager
@@ -283,13 +283,14 @@ class ModifyValueDialog : BaseDialog {
 
         binding.btnConfirm.setOnClickListener {
             val newValue = binding.inputValue.text.toString().trim()
+            val freeze = binding.cbIsFreeze.isChecked
 
             if (newValue.isEmpty()) {
                 notification.showError(context.getString(R.string.error_empty_search_value))
                 return@setOnClickListener
             }
 
-            onConfirm?.invoke(address, value, newValue, currentValueType)
+            onConfirm?.invoke(address, value, newValue, currentValueType, freeze)
             dialog.dismiss()
         }
     }

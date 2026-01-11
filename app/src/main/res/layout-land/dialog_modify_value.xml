@@ -150,14 +150,14 @@
                     android:orientation="horizontal"
                     android:padding="@dimen/floating_spacing_sm">
 
-                    <CheckBox
+                    <!-- CheckBox -->
+                    <com.google.android.material.checkbox.MaterialCheckBox
                         android:id="@+id/cb_is_freeze"
+                        style="@style/FloatingCheckBox"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:buttonTint="#FFFFFF"
-                        android:gravity="center_vertical"
                         android:text="@string/label_value_freeze"
-                        android:textColor="#FFFFFF"
+                        android:checked="false"
                         tools:ignore="RtlHardcoded" />
 
                 </LinearLayout>

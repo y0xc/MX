@@ -671,6 +671,26 @@ class SearchController(
         notification.showWarning("恢复并移除功能开发中")
     }
 
+    /**
+     * Data class for batch write operation collection
+     * Used to collect all valid write operations before executing batch write
+     */
+    private data class WriteOperation(
+        val address: Long,
+        val dataBytes: ByteArray,
+        val originalValue: String,
+        val originalType: DisplayValueType
+    ) {
+        override fun equals(other: Any?): Boolean {
+            if (this === other) return true
+            if (javaClass != other?.javaClass) return false
+            other as WriteOperation
+            return address == other.address
+        }
+
+        override fun hashCode(): Int = address.hashCode()
+    }
+
     private fun restoreSelectedItems() {
         val selectedItems = searchResultAdapter.getSelectedItems()
         if (selectedItems.isEmpty()) {
@@ -684,12 +704,11 @@ class SearchController(
         }
 
         coroutineScope.launch {
-            var successCount = 0
-            var failureCount = 0
-            var noBackupCount = 0
-            val successfulChanges = mutableListOf<BatchAddressValueChangedEvent.AddressChange>()
-
             withContext(Dispatchers.IO) {
+                // Phase 1: Collection - prepare batch data
+                val writeOperations = mutableListOf<WriteOperation>()
+                var noBackupCount = 0
+
                 selectedItems.forEach { item ->
                     val address = when (item) {
                         is ExactSearchResultItem -> item.address
@@ -697,7 +716,7 @@ class SearchController(
                         else -> return@forEach
                     }
 
-                    // 获取备份记录
+                    // Get backup record
                     val backup = MemoryBackupManager.getBackup(address)
                     if (backup == null) {
                         noBackupCount++
@@ -705,74 +724,118 @@ class SearchController(
                     }
 
                     try {
-                        // 将备份值转换为字节
+                        // Convert backup value to bytes
                         val dataBytes = ValueTypeUtils.parseExprToBytes(
                             backup.originalValue,
                             backup.originalType
                         )
-
-                        // 写回内存
-                        val success = WuwaDriver.writeMemory(address, dataBytes)
-                        if (success) {
-                            // 更新UI（需要在主线程）
-                            withContext(Dispatchers.Main) {
-                                searchResultAdapter.updateItemValueByAddress(
-                                    address,
-                                    backup.originalValue
-                                )
-                            }
-                            successfulChanges.add(
-                                BatchAddressValueChangedEvent.AddressChange(
-                                    address = address,
-                                    newValue = backup.originalValue,
-                                    valueType = backup.originalType.nativeId
-                                )
+                        writeOperations.add(
+                            WriteOperation(
+                                address = address,
+                                dataBytes = dataBytes,
+                                originalValue = backup.originalValue,
+                                originalType = backup.originalType
                             )
-
-                            // 恢复成功后删除备份记录
-                            MemoryBackupManager.removeBackup(address)
-                            successCount++
-                        } else {
-                            failureCount++
-                        }
+                        )
                     } catch (e: Exception) {
+                        // Skip invalid backup data
+                    }
+                }
+
+                // Handle case where no valid operations exist
+                if (writeOperations.isEmpty()) {
+                    withContext(Dispatchers.Main) {
+                        showRestoreResultNotification(0, 0, noBackupCount, selectedItems.size)
+                    }
+                    return@withContext
+                }
+
+                // Phase 2: Batch write - single native call
+                val addresses = writeOperations.map { it.address }.toLongArray()
+                val dataArrays = writeOperations.map { it.dataBytes }.toTypedArray()
+                val results = WuwaDriver.batchWriteMemory(addresses, dataArrays)
+
+                // Phase 3: Result processing
+                val successfulChanges = mutableListOf<BatchAddressValueChangedEvent.AddressChange>()
+                var successCount = 0
+                var failureCount = 0
+
+                results.forEachIndexed { index, success ->
+                    val op = writeOperations[index]
+                    if (success) {
+                        successfulChanges.add(
+                            BatchAddressValueChangedEvent.AddressChange(
+                                address = op.address,
+                                newValue = op.originalValue,
+                                valueType = op.originalType.nativeId
+                            )
+                        )
+                        // Remove backup only for successful writes
+                        MemoryBackupManager.removeBackup(op.address)
+                        successCount++
+                    } else {
+                        // Retain backup for failed writes (for retry)
                         failureCount++
                     }
                 }
-            }
 
-            // 发送批量事件通知其他界面同步更新
-            if (successfulChanges.isNotEmpty()) {
-                FloatingEventBus.emitBatchAddressValueChanged(
-                    BatchAddressValueChangedEvent(
-                        changes = successfulChanges,
-                        source = AddressValueChangedEvent.Source.SEARCH
-                    )
-                )
-            }
-
-            // 显示结果统计
-            when {
-                selectedItems.size == noBackupCount -> {
-                    notification.showWarning("所选项目均无备份记录")
-                }
-                failureCount == 0 && noBackupCount == 0 -> {
-                    notification.showSuccess("成功恢复 $successCount 个地址")
-                }
-                else -> {
-                    val message = buildString {
-                        if (successCount > 0) append("成功: $successCount")
-                        if (failureCount > 0) {
-                            if (isNotEmpty()) append(", ")
-                            append("失败: $failureCount")
-                        }
-                        if (noBackupCount > 0) {
-                            if (isNotEmpty()) append(", ")
-                            append("无备份: $noBackupCount")
+                // Phase 4: Single UI update on main thread
+                if (successfulChanges.isNotEmpty()) {
+                    withContext(Dispatchers.Main) {
+                        successfulChanges.forEach { change ->
+                            searchResultAdapter.updateItemValueByAddress(
+                                change.address,
+                                change.newValue
+                            )
                         }
                     }
-                    notification.showWarning(message)
+
+                    // Phase 5: Emit single batch event
+                    FloatingEventBus.emitBatchAddressValueChanged(
+                        BatchAddressValueChangedEvent(
+                            changes = successfulChanges,
+                            source = AddressValueChangedEvent.Source.SEARCH
+                        )
+                    )
                 }
+
+                // Show notification on main thread
+                withContext(Dispatchers.Main) {
+                    showRestoreResultNotification(successCount, failureCount, noBackupCount, selectedItems.size)
+                }
+            }
+        }
+    }
+
+    /**
+     * Helper method to show restore operation result notification
+     */
+    private fun showRestoreResultNotification(
+        successCount: Int,
+        failureCount: Int,
+        noBackupCount: Int,
+        totalSelected: Int
+    ) {
+        when {
+            totalSelected == noBackupCount -> {
+                notification.showWarning("所选项目均无备份记录")
+            }
+            failureCount == 0 && noBackupCount == 0 -> {
+                notification.showSuccess("成功恢复 $successCount 个地址")
+            }
+            else -> {
+                val message = buildString {
+                    if (successCount > 0) append("成功: $successCount")
+                    if (failureCount > 0) {
+                        if (isNotEmpty()) append(", ")
+                        append("失败: $failureCount")
+                    }
+                    if (noBackupCount > 0) {
+                        if (isNotEmpty()) append(", ")
+                        append("无备份: $noBackupCount")
+                    }
+                }
+                notification.showWarning(message)
             }
         }
     }
@@ -1093,7 +1156,8 @@ class SearchController(
         fun batchModifyValues(
             items: List<SearchResultItem>,
             newValue: String,
-            valueType: DisplayValueType
+            valueType: DisplayValueType,
+            freeze: Boolean
         ) {
             coroutineScope.launch {
                 var successCount = 0
@@ -1139,6 +1203,36 @@ class SearchController(
                                             valueType = valueType.nativeId
                                         )
                                     )
+                                    
+                                    // 如果勾选了冻结，添加到冻结管理器并保存到地址列表
+                                    if (freeze) {
+                                        FreezeManager.addFrozen(address, dataBytes, valueType.nativeId)
+                                        
+                                        // 查找对应的内存范围
+                                        val ranges = getRanges()
+                                        val range = when (item) {
+                                            is ExactSearchResultItem -> ranges?.find { r ->
+                                                address >= r.start && address < r.end
+                                            }
+                                            is FuzzySearchResultItem -> ranges?.find { r ->
+                                                address >= r.start && address < r.end
+                                            }
+                                            else -> null
+                                        }
+                                        
+                                        // 发送保存并冻结事件
+                                        withContext(Dispatchers.Main) {
+                                            FloatingEventBus.emitSaveAndFreeze(
+                                                SaveAndFreezeEvent(
+                                                    address = address,
+                                                    value = newValue,
+                                                    valueType = valueType,
+                                                    range = range
+                                                )
+                                            )
+                                        }
+                                    }
+                                    
                                     successCount++
                                 } else {
                                     failureCount++
@@ -1161,7 +1255,8 @@ class SearchController(
 
                     // 显示结果统计
                     if (failureCount == 0) {
-                        notification.showSuccess("成功修改 $successCount 个地址")
+                        val freezeMsg = if (freeze) " 并冻结" else ""
+                        notification.showSuccess("成功修改$freezeMsg $successCount 个地址")
                     } else {
                         notification.showWarning("成功: $successCount, 失败: $failureCount")
                     }
@@ -1185,8 +1280,8 @@ class SearchController(
             notification = notification,
             clipboardManager = clipboardManager,
             searchResultItems = selectedItems,
-            onConfirm = { items, newValue, valueType ->
-                batchModifyValues(items, newValue, valueType)
+            onConfirm = { items, newValue, valueType, freeze ->
+                batchModifyValues(items, newValue, valueType, freeze)
             }
         )
 

@@ -793,8 +793,8 @@ class SavedAddressController(
             notification = notification,
             clipboardManager = clipboardManager,
             savedAddresses = selectedItems,
-            onConfirm = { items, newValue, valueType ->
-                batchModifyValues(items, newValue, valueType)
+            onConfirm = { items, newValue, valueType, freeze ->
+                batchModifyValues(items, newValue, valueType, freeze)
             }
         )
 
@@ -807,7 +807,8 @@ class SavedAddressController(
     private fun batchModifyValues(
         items: List<SavedAddress>,
         newValue: String,
-        valueType: DisplayValueType
+        valueType: DisplayValueType,
+        freeze: Boolean
     ) {
         coroutineScope.launch {
             try {
@@ -837,11 +838,16 @@ class SavedAddressController(
                         val item = items[index]
                         val addrIndex = savedAddresses.indexOfFirst { it.address == item.address }
                         if (addrIndex >= 0) {
-                            savedAddresses[addrIndex] = item.copy(value = newValue)
+                            // 如果勾选了冻结，或者该地址已经被冻结，则更新冻结状态
+                            val newFrozenState = freeze || savedAddresses[addrIndex].isFrozen
+                            savedAddresses[addrIndex] = item.copy(
+                                value = newValue,
+                                isFrozen = newFrozenState
+                            )
                             adapter.updateAddress(savedAddresses[addrIndex])
                             
-                            // 如果该地址被冻结，更新冻结的值
-                            if (savedAddresses[addrIndex].isFrozen) {
+                            // 如果需要冻结，更新冻结管理器
+                            if (newFrozenState) {
                                 FreezeManager.addFrozen(item.address, dataBytes, valueType.nativeId)
                             }
                         }
@@ -869,7 +875,8 @@ class SavedAddressController(
                 }
 
                 if (failureCount == 0) {
-                    notification.showSuccess("成功修改 $successCount 个地址")
+                    val freezeMsg = if (freeze) " 并冻结" else ""
+                    notification.showSuccess("成功修改$freezeMsg $successCount 个地址")
                 } else {
                     notification.showWarning("成功: $successCount, 失败: $failureCount")
                 }

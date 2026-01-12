@@ -26,8 +26,8 @@ class BatchModifyValueDialog private constructor(
     private val clipboardManager: ClipboardManager,
     private val searchResultItems: List<SearchResultItem>?,
     private val savedAddresses: List<SavedAddress>?,
-    private val onConfirmSearchResult: ((items: List<SearchResultItem>, newValue: String, valueType: DisplayValueType) -> Unit)?,
-    private val onConfirmSavedAddress: ((items: List<SavedAddress>, newValue: String, valueType: DisplayValueType) -> Unit)?
+    private val onConfirmSearchResult: ((items: List<SearchResultItem>, newValue: String, valueType: DisplayValueType, freeze: Boolean) -> Unit)?,
+    private val onConfirmSavedAddress: ((items: List<SavedAddress>, newValue: String, valueType: DisplayValueType, freeze: Boolean) -> Unit)?
 ) : BaseDialog(context) {
 
     // 用于搜索结果的构造函数
@@ -36,7 +36,7 @@ class BatchModifyValueDialog private constructor(
         notification: NotificationOverlay,
         clipboardManager: ClipboardManager,
         searchResultItems: List<SearchResultItem>,
-        onConfirm: ((items: List<SearchResultItem>, newValue: String, valueType: DisplayValueType) -> Unit)?
+        onConfirm: ((items: List<SearchResultItem>, newValue: String, valueType: DisplayValueType, freeze: Boolean) -> Unit)?
     ) : this(context, notification, clipboardManager, searchResultItems, null, onConfirm, null)
 
     // 用于保存地址的构造函数
@@ -45,7 +45,7 @@ class BatchModifyValueDialog private constructor(
         clipboardManager: ClipboardManager,
         notification: NotificationOverlay,
         savedAddresses: List<SavedAddress>,
-        onConfirm: ((items: List<SavedAddress>, newValue: String, valueType: DisplayValueType) -> Unit)?
+        onConfirm: ((items: List<SavedAddress>, newValue: String, valueType: DisplayValueType, freeze: Boolean) -> Unit)?
     ) : this(context, notification, clipboardManager, null, savedAddresses, null, onConfirm)
 
     private val itemCount: Int
@@ -208,6 +208,7 @@ class BatchModifyValueDialog private constructor(
 
         binding.btnConfirm.setOnClickListener {
             val newValue = binding.inputValue.text.toString().trim()
+            val freeze = binding.cbIsFreeze.isChecked
 
             if (newValue.isEmpty()) {
                 notification.showError(context.getString(R.string.error_empty_search_value))
@@ -216,10 +217,10 @@ class BatchModifyValueDialog private constructor(
 
             // 根据数据类型调用对应的回调
             searchResultItems?.let {
-                onConfirmSearchResult?.invoke(it, newValue, currentValueType)
+                onConfirmSearchResult?.invoke(it, newValue, currentValueType, freeze)
             }
             savedAddresses?.let {
-                onConfirmSavedAddress?.invoke(it, newValue, currentValueType)
+                onConfirmSavedAddress?.invoke(it, newValue, currentValueType, freeze)
             }
             dialog.dismiss()
         }

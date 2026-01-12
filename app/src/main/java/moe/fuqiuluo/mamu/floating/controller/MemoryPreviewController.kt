@@ -742,26 +742,63 @@ class MemoryPreviewController(
         val clipboardManager = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
         BatchModifyValueDialog(
             context = context,
-            notification = notification,
             clipboardManager = clipboardManager,
+            notification = notification,
             savedAddresses = tempAddresses,
-            onConfirm = { items, newValue, valueType ->
-                batchModifyMemoryValues(items.map { it.address }, newValue, valueType)
+            onConfirm = { items, newValue, valueType, freeze ->
+                batchModifyMemoryValues(items.map { it.address }, newValue, valueType, freeze)
             }
         ).show()
     }
 
-    private fun batchModifyMemoryValues(addresses: List<Long>, newValue: String, valueType: DisplayValueType) {
+    private fun batchModifyMemoryValues(addresses: List<Long>, newValue: String, valueType: DisplayValueType, freeze: Boolean) {
         coroutineScope.launch {
             try {
                 val dataBytes = ValueTypeUtils.parseExprToBytes(newValue, valueType)
                 val results = withContext(Dispatchers.IO) {
                     WuwaDriver.batchWriteMemory(addresses.toLongArray(), Array(addresses.size) { dataBytes })
                 }
-                val successCount = results.count { it }
-                val failureCount = results.size - successCount
+                var successCount = 0
+                var failureCount = 0
+                
+                results.forEachIndexed { index, success ->
+                    if (success) {
+                        val address = addresses[index]
+                        
+                        // 如果勾选了冻结，添加到冻结管理器并保存到地址列表
+                        if (freeze) {
+                            FreezeManager.addFrozen(address, dataBytes, valueType.nativeId)
+                            
+                            // 查找对应的内存范围
+                            val row = adapter.getSelectedRows().find { it.address == address }
+                            val memRange = row?.memoryRange ?: MemoryRange.O
+                            val range = DisplayMemRegionEntry(
+                                start = address,
+                                end = address + valueType.memorySize,
+                                type = 0x03, // readable + writable
+                                name = "",
+                                range = memRange
+                            )
+                            
+                            // 发送保存并冻结事件
+                            FloatingEventBus.emitSaveAndFreeze(
+                                SaveAndFreezeEvent(
+                                    address = address,
+                                    value = newValue,
+                                    valueType = valueType,
+                                    range = range
+                                )
+                            )
+                        }
+                        successCount++
+                    } else {
+                        failureCount++
+                    }
+                }
+                
                 if (failureCount == 0) {
-                    notification.showSuccess("成功修改 $successCount 个地址")
+                    val freezeMsg = if (freeze) " 并冻结" else ""
+                    notification.showSuccess("成功修改$freezeMsg $successCount 个地址")
                     adapter.refreshAll()
                 } else {
                     notification.showWarning("成功: $successCount, 失败: $failureCount")
